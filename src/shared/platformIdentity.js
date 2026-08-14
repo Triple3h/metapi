@@ -18,6 +18,8 @@ export const PLATFORM_ALIASES = Object.assign(Object.create(null), {
   veloera: 'veloera',
   sub2api: 'sub2api',
   openai: 'openai',
+  responses: 'responses',
+  'openai-responses': 'responses',
   codex: 'codex',
   'chatgpt-codex': 'codex',
   'chatgpt codex': 'codex',

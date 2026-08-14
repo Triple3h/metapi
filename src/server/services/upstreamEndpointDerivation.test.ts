@@ -76,6 +76,46 @@ describe('upstreamEndpointDerivation', () => {
     expect(order).toEqual(['responses', 'chat', 'messages']);
   });
 
+  it('keeps responses-protocol platforms on responses-only ordering for every downstream format', async () => {
+    for (const downstreamFormat of ['openai', 'claude', 'responses'] as const) {
+      const order = await resolveUpstreamEndpointCandidates(
+        {
+          ...baseContext,
+          site: {
+            ...baseContext.site,
+            platform: 'responses',
+            url: 'https://ark.cn-beijing.volces.com/api/plan/v3',
+          },
+        },
+        'ark-code-latest',
+        downstreamFormat,
+      );
+
+      expect(order).toEqual(['responses']);
+    }
+  });
+
+  it('keeps responses-protocol platforms on responses-only ordering for file-url requests', async () => {
+    const order = await resolveUpstreamEndpointCandidates(
+      {
+        ...baseContext,
+        site: {
+          ...baseContext.site,
+          platform: 'responses',
+          url: 'https://ark.cn-beijing.volces.com/api/plan/v3',
+        },
+      },
+      'ark-code-latest',
+      'openai',
+      undefined,
+      {
+        hasNonImageFileInput: true,
+      },
+    );
+
+    expect(order).toEqual(['responses']);
+  });
+
   it('keeps antigravity non-gemini compatibility requests on messages-first ordering', async () => {
     const order = await resolveUpstreamEndpointCandidates(
       {

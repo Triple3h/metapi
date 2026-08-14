@@ -33,6 +33,19 @@ describe('sanitizeCompactResponsesRequestBody', () => {
     });
   });
 
+  it('removes store from responses-protocol compact requests', () => {
+    expect(sanitizeCompactResponsesRequestBody({
+      stream: true,
+      stream_options: { include_obfuscation: true },
+      store: false,
+      input: 'hello',
+    }, {
+      sitePlatform: 'responses',
+    })).toEqual({
+      input: 'hello',
+    });
+  });
+
   it('keeps store for unrelated compact platforms while still removing stream fields', () => {
     expect(sanitizeCompactResponsesRequestBody({
       stream: true,
@@ -49,13 +62,17 @@ describe('sanitizeCompactResponsesRequestBody', () => {
 });
 
 describe('shouldForceResponsesUpstreamStream', () => {
-  it('forces non-compact responses streaming for codex and sub2api', () => {
+  it('forces non-compact responses streaming for codex, sub2api, and responses platforms', () => {
     expect(shouldForceResponsesUpstreamStream({
       sitePlatform: 'codex',
       isCompactRequest: false,
     })).toBe(true);
     expect(shouldForceResponsesUpstreamStream({
       sitePlatform: 'sub2api',
+      isCompactRequest: false,
+    })).toBe(true);
+    expect(shouldForceResponsesUpstreamStream({
+      sitePlatform: 'responses',
       isCompactRequest: false,
     })).toBe(true);
   });

@@ -98,6 +98,10 @@ function preferredEndpointOrder(
     return ['responses'];
   }
 
+  if (platform === 'responses') {
+    return ['responses'];
+  }
+
   if (platform === 'gemini' || platform === 'gemini-cli') {
     return ['chat'];
   }
@@ -213,6 +217,7 @@ export async function resolveUpstreamEndpointCandidates(
   const preferredWithCapabilities = hasNonImageFileInput
     ? (() => {
       if (sitePlatform === 'claude') return ['messages'] as UpstreamEndpoint[];
+      if (sitePlatform === 'responses') return ['responses'] as UpstreamEndpoint[];
       if (sitePlatform === 'gemini') return ['responses', 'chat'] as UpstreamEndpoint[];
       if (sitePlatform === 'gemini-cli') return ['chat'] as UpstreamEndpoint[];
       if (sitePlatform === 'antigravity') return ['messages'] as UpstreamEndpoint[];

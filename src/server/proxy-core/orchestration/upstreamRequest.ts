@@ -80,6 +80,20 @@ function joinPath(basePath: string, requestPath: string): string {
   return `${base}${path}`;
 }
 
+const BASE_VERSION_SUFFIX_PATTERN = /\/v\d+(?:\.\d+)?(?:beta)?$/i;
+const PATH_VERSION_PREFIX_PATTERN = /^\/v\d+(?:\.\d+)?(?:beta)?(?=\/|$)/i;
+
+function stripPathVersionPrefix(base: string, requestPath: string): string {
+  if (!BASE_VERSION_SUFFIX_PATTERN.test(base)) return requestPath;
+
+  const match = requestPath.match(PATH_VERSION_PREFIX_PATTERN);
+  if (!match) return requestPath;
+
+  const stripped = requestPath.slice(match[0].length);
+  if (!stripped) return '/';
+  return stripped.startsWith('/') ? stripped : `/${stripped}`;
+}
+
 export function summarizeUpstreamError(status: number, rawErrorText: string): string {
   const statusPrefix = status > 0
     ? `Upstream returned HTTP ${status}`
@@ -112,26 +126,12 @@ export function buildUpstreamUrl(siteUrl: string, requestPath: string): string {
   try {
     const parsed = new URL(baseRaw);
     const basePath = parsed.pathname.replace(/\/+$/, '');
-    const baseHasVersionSuffix = /\/(?:api\/)?v1$/i.test(basePath);
-    if (baseHasVersionSuffix) {
-      if (path === '/v1') {
-        path = '/';
-      } else if (path.startsWith('/v1/')) {
-        path = path.slice('/v1'.length) || '/';
-      }
-    }
+    path = stripPathVersionPrefix(basePath, path);
 
     const joinedPath = joinPath(basePath, path);
     return `${formatUrlOrigin(parsed)}${joinedPath}${parsed.search}${parsed.hash}`;
   } catch {
-    const baseHasVersionSuffix = /\/(?:api\/)?v1$/i.test(fallbackBase);
-    if (baseHasVersionSuffix) {
-      if (path === '/v1') {
-        path = '/';
-      } else if (path.startsWith('/v1/')) {
-        path = path.slice('/v1'.length) || '/';
-      }
-    }
+    path = stripPathVersionPrefix(fallbackBase, path);
 
     return `${fallbackBase}${path}`;
   }

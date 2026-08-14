@@ -68,6 +68,11 @@ describe('getAdapter platform aliases', () => {
     expect(getAdapter('chatgpt-codex')?.platformName).toBe('codex');
   });
 
+  it('supports responses-protocol adapter and aliases', () => {
+    expect(getAdapter('responses')?.platformName).toBe('responses');
+    expect(getAdapter('openai-responses')?.platformName).toBe('responses');
+  });
+
   it('detects anyrouter URL before generic new-api adapter', async () => {
     const adapter = await detectPlatform('https://anyrouter.top');
     expect(adapter?.platformName).toBe('anyrouter');

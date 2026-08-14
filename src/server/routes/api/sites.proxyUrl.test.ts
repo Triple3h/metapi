@@ -669,6 +669,7 @@ describe('sites proxy settings', () => {
       { url: 'https://api-inference.modelscope.cn/v1', platform: 'openai', initializationPresetId: 'modelscope-openai' },
       { url: 'https://api-inference.modelscope.cn', platform: 'claude', initializationPresetId: 'modelscope-claude' },
       { url: 'https://ark.cn-beijing.volces.com/api/coding/v3', platform: 'openai', initializationPresetId: 'doubao-coding-openai' },
+      { url: 'https://ark.cn-beijing.volces.com/api/plan/v3', platform: 'responses', initializationPresetId: 'doubao-plan-responses' },
     ];
 
     for (const testCase of cases) {
@@ -701,6 +702,24 @@ describe('sites proxy settings', () => {
       name: 'Doubao Coding Plan',
       platform: 'openai',
       initializationPresetId: 'doubao-coding-openai',
+    });
+  });
+
+  it('creates Doubao Responses Plan sites without explicit platform by using preset-backed detection', async () => {
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/sites',
+      payload: {
+        name: 'Doubao Responses Plan',
+        url: 'https://ark.cn-beijing.volces.com/api/plan/v3',
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      name: 'Doubao Responses Plan',
+      platform: 'responses',
+      initializationPresetId: 'doubao-plan-responses',
     });
   });
 });

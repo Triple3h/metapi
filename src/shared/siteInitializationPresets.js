@@ -274,6 +274,21 @@ const SITE_INITIALIZATION_PRESETS = Object.freeze([
       return matchesHostAndPaths(url, 'ark.cn-beijing.volces.com', ['/api/coding/v3']);
     },
   }),
+  Object.freeze({
+    id: 'doubao-plan-responses',
+    label: '豆包 Coding Plan / Responses',
+    providerLabel: '豆包 Coding Plan',
+    description: '适合火山方舟 Coding Plan 的 OpenAI Responses 协议入口，推荐优先使用 ark-code 与豆包编程模型。',
+    platform: 'responses',
+    defaultUrl: 'https://ark.cn-beijing.volces.com/api/plan/v3',
+    initialSegment: 'apikey',
+    recommendedSkipModelFetch: true,
+    recommendedModels: DOUBAO_CODING_RECOMMENDED_MODELS,
+    docsUrl: 'https://www.volcengine.com/docs/82379/2205646?lang=zh',
+    matches(url) {
+      return matchesHostAndPaths(url, 'ark.cn-beijing.volces.com', ['/api/plan/v3']);
+    },
+  }),
 ]);
 
 function clonePreset(preset) {

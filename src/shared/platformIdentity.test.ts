@@ -10,6 +10,8 @@ describe('platformIdentity', () => {
     expect(normalizePlatformAlias('chatgpt-codex')).toBe('codex');
     expect(normalizePlatformAlias('anti-gravity')).toBe('antigravity');
     expect(normalizePlatformAlias('one api')).toBe('one-api');
+    expect(normalizePlatformAlias('openai-responses')).toBe('responses');
+    expect(normalizePlatformAlias('responses')).toBe('responses');
     expect(normalizePlatformAlias('')).toBe('');
   });
 

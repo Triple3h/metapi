@@ -7,6 +7,7 @@ import { OneHubAdapter } from './oneHub.js';
 import { DoneHubAdapter } from './doneHub.js';
 import { Sub2ApiAdapter } from './sub2api.js';
 import { OpenAiAdapter } from './openai.js';
+import { ResponsesProtocolAdapter } from './responses.js';
 import { CodexAdapter } from './codex.js';
 import { ClaudeAdapter } from './claude.js';
 import { GeminiAdapter } from './gemini.js';
@@ -19,6 +20,7 @@ import { detectPlatformByUrlHint, normalizePlatformAlias } from '../../../shared
 const adapters: PlatformAdapter[] = [
   // Specific forks before generic adapters for better auto-detection.
   new OpenAiAdapter(),
+  new ResponsesProtocolAdapter(),
   new CodexAdapter(),
   new ClaudeAdapter(),
   new GeminiAdapter(),

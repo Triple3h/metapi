@@ -23,6 +23,7 @@ describe('siteInitializationPresets', () => {
       'modelscope-openai',
       'modelscope-claude',
       'doubao-coding-openai',
+      'doubao-plan-responses',
     ]));
 
     const openaiPreset = getSiteInitializationPreset('codingplan-openai');
@@ -122,6 +123,20 @@ describe('siteInitializationPresets', () => {
       'doubao-seed-2.0-code',
       'doubao-seed-2.0-pro',
     ]);
+
+    const doubaoPlanPreset = getSiteInitializationPreset('doubao-plan-responses');
+    expect(doubaoPlanPreset).toMatchObject({
+      id: 'doubao-plan-responses',
+      platform: 'responses',
+      defaultUrl: 'https://ark.cn-beijing.volces.com/api/plan/v3',
+      initialSegment: 'apikey',
+      recommendedSkipModelFetch: true,
+    });
+    expect(doubaoPlanPreset?.recommendedModels).toEqual([
+      'ark-code-latest',
+      'doubao-seed-2.0-code',
+      'doubao-seed-2.0-pro',
+    ]);
   });
 
   it('detects Aliyun CodingPlan endpoints by URL', () => {
@@ -188,6 +203,11 @@ describe('siteInitializationPresets', () => {
     expect(detectSiteInitializationPreset('https://ark.cn-beijing.volces.com/api/coding/v3')).toMatchObject({
       id: 'doubao-coding-openai',
       platform: 'openai',
+    });
+
+    expect(detectSiteInitializationPreset('https://ark.cn-beijing.volces.com/api/plan/v3')).toMatchObject({
+      id: 'doubao-plan-responses',
+      platform: 'responses',
     });
   });
 

@@ -468,6 +468,12 @@ export function buildUpstreamEndpointRequest(input: {
       return '/responses';
     }
 
+    if (sitePlatform === 'responses') {
+      if (endpoint === 'responses') return '/responses';
+      if (endpoint === 'messages') return '/v1/messages';
+      return '/v1/chat/completions';
+    }
+
     if (sitePlatform === 'gemini-cli' || sitePlatform === 'antigravity') {
       return input.stream
         ? '/v1internal:streamGenerateContent?alt=sse'

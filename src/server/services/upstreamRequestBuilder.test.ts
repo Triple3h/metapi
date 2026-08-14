@@ -33,6 +33,29 @@ describe('upstreamRequestBuilder', () => {
     expect(request.body.store).toBe(false);
   });
 
+  it('builds responses-platform upstream requests against the bare /responses path', () => {
+    const request = buildUpstreamEndpointRequest({
+      endpoint: 'responses',
+      modelName: 'ark-code-latest',
+      stream: true,
+      tokenValue: 'sk-test',
+      sitePlatform: 'responses',
+      siteUrl: 'https://ark.cn-beijing.volces.com/api/plan/v3',
+      openaiBody: {},
+      downstreamFormat: 'responses',
+      responsesOriginalBody: {
+        model: 'ark-code-latest',
+        input: 'hello',
+      },
+    });
+
+    expect(request.path).toBe('/responses');
+    expect(request.headers.Authorization).toBe('Bearer sk-test');
+    expect(request.headers.accept).toBe('text/event-stream');
+    expect(request.body.stream).toBe(true);
+    expect(request.runtime?.executor).toBe('default');
+  });
+
   it('forces store=false for sub2api native responses passthrough bodies', () => {
     const request = buildUpstreamEndpointRequest({
       endpoint: 'responses',

@@ -2,9 +2,13 @@ function asTrimmedString(value: unknown): string {
   return typeof value === 'string' ? value.trim() : '';
 }
 
-function shouldStripCompactResponsesStore(sitePlatform?: string): boolean {
+function isResponsesNativeUpstream(sitePlatform?: string): boolean {
   const normalized = asTrimmedString(sitePlatform).toLowerCase();
-  return normalized === 'codex' || normalized === 'sub2api';
+  return normalized === 'codex' || normalized === 'sub2api' || normalized === 'responses';
+}
+
+function shouldStripCompactResponsesStore(sitePlatform?: string): boolean {
+  return isResponsesNativeUpstream(sitePlatform);
 }
 
 function shouldForceCompactResponsesJsonAccept(sitePlatform?: string): boolean {
@@ -16,8 +20,7 @@ export function shouldForceResponsesUpstreamStream(input: {
   isCompactRequest?: boolean;
 }): boolean {
   if (input.isCompactRequest) return false;
-  const sitePlatform = asTrimmedString(input.sitePlatform).toLowerCase();
-  return sitePlatform === 'codex' || sitePlatform === 'sub2api';
+  return isResponsesNativeUpstream(input.sitePlatform);
 }
 
 export function sanitizeCompactResponsesRequestBody(
