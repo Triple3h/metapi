@@ -42,6 +42,12 @@ const CODINGPLAN_RECOMMENDED_MODELS = Object.freeze([
   'glm-5',
 ]);
 
+const TOKEN_PLAN_RECOMMENDED_MODELS = Object.freeze([
+  'qwen3.8-max',
+  'qwen3.7-max',
+  'qwen3.6-flash',
+]);
+
 const ZHIPU_CODING_PLAN_RECOMMENDED_MODELS = Object.freeze([
   'glm-4.7',
   'glm-4.6',
@@ -78,6 +84,13 @@ const DOUBAO_CODING_RECOMMENDED_MODELS = Object.freeze([
   'doubao-seed-2.0-pro',
 ]);
 
+const VOLCENGINE_AGENT_PLAN_RECOMMENDED_MODELS = Object.freeze([
+  'ark-code-latest',
+  'doubao-seed-2.1-turbo',
+  'glm-5.2',
+  'kimi-k3',
+]);
+
 const SITE_INITIALIZATION_PRESETS = Object.freeze([
   Object.freeze({
     id: 'codingplan-openai',
@@ -107,6 +120,36 @@ const SITE_INITIALIZATION_PRESETS = Object.freeze([
     docsUrl: 'https://help.aliyun.com/zh/model-studio/coding-plan-faq',
     matches(url) {
       return matchesHostAndPaths(url, 'coding.dashscope.aliyuncs.com', ['/apps/anthropic']);
+    },
+  }),
+  Object.freeze({
+    id: 'token-plan-openai',
+    label: '阿里云 Token Plan / OpenAI',
+    providerLabel: '阿里云 Token Plan',
+    description: '适合阿里云百炼 Token Plan 的 OpenAI 兼容入口，使用 sk-sp- 开头的专属 API Key，与 CodingPlan / 按量付费的 Key 互不通用。',
+    platform: 'openai',
+    defaultUrl: 'https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1',
+    initialSegment: 'apikey',
+    recommendedSkipModelFetch: true,
+    recommendedModels: TOKEN_PLAN_RECOMMENDED_MODELS,
+    docsUrl: 'https://help.aliyun.com/zh/model-studio/token-plan-personal-quick-start',
+    matches(url) {
+      return matchesHostAndPaths(url, 'token-plan.cn-beijing.maas.aliyuncs.com', ['/compatible-mode/v1']);
+    },
+  }),
+  Object.freeze({
+    id: 'token-plan-claude',
+    label: '阿里云 Token Plan / Claude',
+    providerLabel: '阿里云 Token Plan',
+    description: '适合阿里云百炼 Token Plan 的 Anthropic 兼容入口，便于 Claude Code 一类工具直接接入，使用 sk-sp- 开头的专属 API Key。',
+    platform: 'claude',
+    defaultUrl: 'https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic',
+    initialSegment: 'apikey',
+    recommendedSkipModelFetch: true,
+    recommendedModels: TOKEN_PLAN_RECOMMENDED_MODELS,
+    docsUrl: 'https://help.aliyun.com/zh/model-studio/token-plan-personal-quick-start',
+    matches(url) {
+      return matchesHostAndPaths(url, 'token-plan.cn-beijing.maas.aliyuncs.com', ['/apps/anthropic']);
     },
   }),
   Object.freeze({
@@ -263,7 +306,7 @@ const SITE_INITIALIZATION_PRESETS = Object.freeze([
     id: 'doubao-coding-openai',
     label: '豆包 Coding Plan / OpenAI',
     providerLabel: '豆包 Coding Plan',
-    description: '适合火山方舟 Coding Plan 的 OpenAI 兼容入口，推荐优先使用 ark-code 与豆包编程模型。',
+    description: '适合火山方舟豆包 Coding Plan 的 OpenAI 兼容入口，使用 Coding Plan 专属 API Key，推荐优先使用 ark-code 与豆包编程模型。',
     platform: 'openai',
     defaultUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
     initialSegment: 'apikey',
@@ -275,18 +318,48 @@ const SITE_INITIALIZATION_PRESETS = Object.freeze([
     },
   }),
   Object.freeze({
-    id: 'doubao-plan-responses',
-    label: '豆包 Coding Plan / Responses',
+    id: 'doubao-coding-claude',
+    label: '豆包 Coding Plan / Claude',
     providerLabel: '豆包 Coding Plan',
-    description: '适合火山方舟 Coding Plan 的 OpenAI Responses 协议入口，推荐优先使用 ark-code 与豆包编程模型。',
-    platform: 'responses',
-    defaultUrl: 'https://ark.cn-beijing.volces.com/api/plan/v3',
+    description: '适合火山方舟豆包 Coding Plan 的 Anthropic 兼容入口，使用 Coding Plan 专属 API Key，便于 Claude Code 一类工具直接接入。',
+    platform: 'claude',
+    defaultUrl: 'https://ark.cn-beijing.volces.com/api/coding',
     initialSegment: 'apikey',
     recommendedSkipModelFetch: true,
     recommendedModels: DOUBAO_CODING_RECOMMENDED_MODELS,
     docsUrl: 'https://www.volcengine.com/docs/82379/2205646?lang=zh',
     matches(url) {
+      return matchesHostAndPaths(url, 'ark.cn-beijing.volces.com', ['/api/coding']);
+    },
+  }),
+  Object.freeze({
+    id: 'agent-plan-responses',
+    label: '火山方舟 Agent Plan / Responses',
+    providerLabel: '火山方舟 Agent Plan',
+    description: '适合火山方舟 Agent Plan 的 OpenAI Responses 协议入口，使用 Agent Plan 专属 API Key（与方舟其他 Key 不通用）。该入口不提供模型列表接口，建议跳过模型验证直接添加后再补入推荐模型。',
+    platform: 'responses',
+    defaultUrl: 'https://ark.cn-beijing.volces.com/api/plan/v3',
+    initialSegment: 'apikey',
+    recommendedSkipModelFetch: true,
+    recommendedModels: VOLCENGINE_AGENT_PLAN_RECOMMENDED_MODELS,
+    docsUrl: 'https://www.volcengine.com/docs/82379/2373746?lang=zh',
+    matches(url) {
       return matchesHostAndPaths(url, 'ark.cn-beijing.volces.com', ['/api/plan/v3']);
+    },
+  }),
+  Object.freeze({
+    id: 'agent-plan-claude',
+    label: '火山方舟 Agent Plan / Claude',
+    providerLabel: '火山方舟 Agent Plan',
+    description: '适合火山方舟 Agent Plan 的 Anthropic 兼容入口，使用 Agent Plan 专属 API Key（与方舟其他 Key 不通用），便于 Claude Code 一类工具直接接入。',
+    platform: 'claude',
+    defaultUrl: 'https://ark.cn-beijing.volces.com/api/plan',
+    initialSegment: 'apikey',
+    recommendedSkipModelFetch: true,
+    recommendedModels: VOLCENGINE_AGENT_PLAN_RECOMMENDED_MODELS,
+    docsUrl: 'https://www.volcengine.com/docs/82379/2373740?lang=zh',
+    matches(url) {
+      return matchesHostAndPaths(url, 'ark.cn-beijing.volces.com', ['/api/plan']);
     },
   }),
 ]);

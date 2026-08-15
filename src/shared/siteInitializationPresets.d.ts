@@ -12,7 +12,9 @@ export type SiteInitializationPresetId =
   | 'modelscope-openai'
   | 'modelscope-claude'
   | 'doubao-coding-openai'
-  | 'doubao-plan-responses';
+  | 'doubao-coding-claude'
+  | 'agent-plan-responses'
+  | 'agent-plan-claude';
 export type SiteInitializationPreset = {
   id: SiteInitializationPresetId;
   label: string;

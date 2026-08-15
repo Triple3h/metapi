@@ -489,6 +489,9 @@ Metapi 支持自动识别站点类型，当前检测优先级如下：
 | `api-inference.modelscope.cn/v1` | `modelscope-openai` |
 | `api-inference.modelscope.cn` | `modelscope-claude` |
 | `ark.cn-beijing.volces.com/api/coding/v3` | `doubao-coding-openai` |
+| `ark.cn-beijing.volces.com/api/coding` | `doubao-coding-claude` |
+| `ark.cn-beijing.volces.com/api/plan/v3` | `agent-plan-responses` |
+| `ark.cn-beijing.volces.com/api/plan` | `agent-plan-claude` |
 
 > [!NOTE]
 > 智谱 Coding Plan 的 Claude 兼容入口当前不会按 URL 强制自动识别，更适合手动选预设。

@@ -669,7 +669,9 @@ describe('sites proxy settings', () => {
       { url: 'https://api-inference.modelscope.cn/v1', platform: 'openai', initializationPresetId: 'modelscope-openai' },
       { url: 'https://api-inference.modelscope.cn', platform: 'claude', initializationPresetId: 'modelscope-claude' },
       { url: 'https://ark.cn-beijing.volces.com/api/coding/v3', platform: 'openai', initializationPresetId: 'doubao-coding-openai' },
-      { url: 'https://ark.cn-beijing.volces.com/api/plan/v3', platform: 'responses', initializationPresetId: 'doubao-plan-responses' },
+      { url: 'https://ark.cn-beijing.volces.com/api/coding', platform: 'claude', initializationPresetId: 'doubao-coding-claude' },
+      { url: 'https://ark.cn-beijing.volces.com/api/plan/v3', platform: 'responses', initializationPresetId: 'agent-plan-responses' },
+      { url: 'https://ark.cn-beijing.volces.com/api/plan', platform: 'claude', initializationPresetId: 'agent-plan-claude' },
     ];
 
     for (const testCase of cases) {
@@ -705,21 +707,21 @@ describe('sites proxy settings', () => {
     });
   });
 
-  it('creates Doubao Responses Plan sites without explicit platform by using preset-backed detection', async () => {
+  it('creates Volcengine Agent Plan Responses sites without explicit platform by using preset-backed detection', async () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/sites',
       payload: {
-        name: 'Doubao Responses Plan',
+        name: 'Volcengine Agent Plan',
         url: 'https://ark.cn-beijing.volces.com/api/plan/v3',
       },
     });
 
     expect(response.statusCode).toBe(200);
     expect(response.json()).toMatchObject({
-      name: 'Doubao Responses Plan',
+      name: 'Volcengine Agent Plan',
       platform: 'responses',
-      initializationPresetId: 'doubao-plan-responses',
+      initializationPresetId: 'agent-plan-responses',
     });
   });
 });

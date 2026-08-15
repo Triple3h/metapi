@@ -14,6 +14,9 @@ import { convergeAccountMutation } from './accountMutationWorkflow.js';
 
 const ACCOUNT_VERIFY_TIMEOUT_MS = 10_000;
 
+export const API_KEY_EMPTY_MODELS_MESSAGE =
+  'API Key 验证失败：未获取到可用模型。部分订阅类站点（如火山方舟 Agent Plan）不提供模型列表接口，可勾选“跳过模型验证（直接添加 API Key）”后手动补入模型。';
+
 type AccountInitializationParams = {
   accountId: number;
   site: typeof schema.sites.$inferSelect;
@@ -183,7 +186,7 @@ export async function createManualAccount({
         ? models.filter((item) => typeof item === 'string' && item.trim().length > 0)
         : [];
       if (verifiedModels.length === 0) {
-        const error = new Error('API Key 验证失败：未获取到可用模型');
+        const error = new Error(API_KEY_EMPTY_MODELS_MESSAGE);
         (error as Error & { requiresVerification?: boolean }).requiresVerification = true;
         throw error;
       }

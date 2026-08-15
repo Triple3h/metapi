@@ -12,6 +12,8 @@ describe('siteInitializationPresets', () => {
     expect(presetIds).toEqual(expect.arrayContaining([
       'codingplan-openai',
       'codingplan-claude',
+      'token-plan-openai',
+      'token-plan-claude',
       'zhipu-coding-plan-openai',
       'zhipu-coding-plan-claude',
       'deepseek-openai',
@@ -23,7 +25,9 @@ describe('siteInitializationPresets', () => {
       'modelscope-openai',
       'modelscope-claude',
       'doubao-coding-openai',
-      'doubao-plan-responses',
+      'doubao-coding-claude',
+      'agent-plan-responses',
+      'agent-plan-claude',
     ]));
 
     const openaiPreset = getSiteInitializationPreset('codingplan-openai');
@@ -124,19 +128,33 @@ describe('siteInitializationPresets', () => {
       'doubao-seed-2.0-pro',
     ]);
 
-    const doubaoPlanPreset = getSiteInitializationPreset('doubao-plan-responses');
-    expect(doubaoPlanPreset).toMatchObject({
-      id: 'doubao-plan-responses',
+    const agentPlanResponsesPreset = getSiteInitializationPreset('agent-plan-responses');
+    expect(agentPlanResponsesPreset).toMatchObject({
+      id: 'agent-plan-responses',
       platform: 'responses',
       defaultUrl: 'https://ark.cn-beijing.volces.com/api/plan/v3',
       initialSegment: 'apikey',
       recommendedSkipModelFetch: true,
     });
-    expect(doubaoPlanPreset?.recommendedModels).toEqual([
-      'ark-code-latest',
-      'doubao-seed-2.0-code',
-      'doubao-seed-2.0-pro',
-    ]);
+    expect(agentPlanResponsesPreset?.recommendedModels).toEqual(expect.arrayContaining(['ark-code-latest', 'doubao-seed-2.1-turbo']));
+
+    const agentPlanClaudePreset = getSiteInitializationPreset('agent-plan-claude');
+    expect(agentPlanClaudePreset).toMatchObject({
+      id: 'agent-plan-claude',
+      platform: 'claude',
+      defaultUrl: 'https://ark.cn-beijing.volces.com/api/plan',
+      initialSegment: 'apikey',
+      recommendedSkipModelFetch: true,
+    });
+
+    const doubaoCodingClaudePreset = getSiteInitializationPreset('doubao-coding-claude');
+    expect(doubaoCodingClaudePreset).toMatchObject({
+      id: 'doubao-coding-claude',
+      platform: 'claude',
+      defaultUrl: 'https://ark.cn-beijing.volces.com/api/coding',
+      initialSegment: 'apikey',
+      recommendedSkipModelFetch: true,
+    });
   });
 
   it('detects Aliyun CodingPlan endpoints by URL', () => {
@@ -149,6 +167,17 @@ describe('siteInitializationPresets', () => {
       platform: 'claude',
     });
     expect(detectSiteInitializationPreset('https://api.openai.com/v1')).toBeNull();
+  });
+
+  it('detects Aliyun Token Plan endpoints by URL', () => {
+    expect(detectSiteInitializationPreset('https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1')).toMatchObject({
+      id: 'token-plan-openai',
+      platform: 'openai',
+    });
+    expect(detectSiteInitializationPreset('https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic')).toMatchObject({
+      id: 'token-plan-claude',
+      platform: 'claude',
+    });
   });
 
   it('detects Zhipu Coding Plan OpenAI endpoints by URL but keeps Claude-compatible entry manual-only', () => {
@@ -205,9 +234,19 @@ describe('siteInitializationPresets', () => {
       platform: 'openai',
     });
 
+    expect(detectSiteInitializationPreset('https://ark.cn-beijing.volces.com/api/coding')).toMatchObject({
+      id: 'doubao-coding-claude',
+      platform: 'claude',
+    });
+
     expect(detectSiteInitializationPreset('https://ark.cn-beijing.volces.com/api/plan/v3')).toMatchObject({
-      id: 'doubao-plan-responses',
+      id: 'agent-plan-responses',
       platform: 'responses',
+    });
+
+    expect(detectSiteInitializationPreset('https://ark.cn-beijing.volces.com/api/plan')).toMatchObject({
+      id: 'agent-plan-claude',
+      platform: 'claude',
     });
   });
 

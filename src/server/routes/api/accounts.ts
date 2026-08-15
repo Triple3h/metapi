@@ -57,7 +57,7 @@ import {
   buildBatchApiKeyConnectionName,
   parseBatchApiKeys,
 } from "../../services/apiKeyBatch.js";
-import { createManualAccount } from "../../services/manualAccountCreationService.js";
+import { API_KEY_EMPTY_MODELS_MESSAGE, createManualAccount } from "../../services/manualAccountCreationService.js";
 
 type AccountWithSiteRow = {
   accounts: typeof schema.accounts.$inferSelect;
@@ -879,7 +879,7 @@ export async function accountsRoutes(app: FastifyInstance) {
           if (availableModels.length === 0) {
             return {
               success: false,
-              message: "API Key 验证失败：未获取到可用模型",
+              message: API_KEY_EMPTY_MODELS_MESSAGE,
             };
           }
           return {
