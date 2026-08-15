@@ -1,4 +1,4 @@
-﻿import { and, eq, inArray, isNull } from 'drizzle-orm';
+import { and, eq, inArray, isNull } from 'drizzle-orm';
 import { db, schema } from '../db/index.js';
 import { upsertSetting } from '../db/upsertSetting.js';
 import {
@@ -1899,6 +1899,16 @@ export class TokenRouter {
     );
   }
 
+  async getRouteStrategyForModel(
+    requestedModel: string,
+    downstreamPolicy: DownstreamRoutingPolicy = DEFAULT_DOWNSTREAM_POLICY,
+  ): Promise<RouteRoutingStrategy | null> {
+    if (!isModelAllowedByDownstreamPolicy(requestedModel, downstreamPolicy)) return null;
+    const match = await this.findRoute(requestedModel, downstreamPolicy);
+    if (!match) return null;
+    return resolveRouteStrategy(match.route);
+  }
+
   async explainSelection(
     requestedModel: string,
     excludeChannelIds: number[] = [],
@@ -1996,7 +2006,9 @@ export class TokenRouter {
       `命中路由：${match.route.modelPattern}`,
       routeStrategy === 'round_robin'
         ? '路由策略：轮询'
-        : (routeStrategy === 'stable_first' ? '路由策略：稳定优先' : '路由策略：按权重随机'),
+        : (routeStrategy === 'stable_first'
+          ? '路由策略：稳定优先'
+          : (routeStrategy === 'key_sticky' ? '路由策略：Key 粘性（首次按权重，后续沿用同一通道）' : '路由策略：按权重随机')),
     ];
     if (requestedByDisplayName) {
       summary.push(`按显示名命中：${normalizeRouteDisplayName(match.route.displayName)}`);

@@ -107,9 +107,20 @@ export async function selectSurfaceChannelForAttempt(input: {
   excludeChannelIds: number[];
   retryCount: number;
   stickySessionKey?: string | null;
+  apiKeyStickyKey?: string | null;
   forcedChannelId?: number | null;
 }): Promise<SelectedChannel> {
   return await selectProxyChannelForAttempt(input);
+}
+
+export function buildSurfaceApiKeyStickyKey(input: {
+  requestedModel: string;
+  downstreamApiKeyId?: number | null;
+}): string | null {
+  return proxyChannelCoordinator.buildApiKeyStickyKey({
+    requestedModel: input.requestedModel,
+    downstreamApiKeyId: input.downstreamApiKeyId,
+  });
 }
 
 export function buildSurfaceStickySessionKey(input: {

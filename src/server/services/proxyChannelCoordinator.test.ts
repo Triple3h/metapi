@@ -64,6 +64,51 @@ describe('proxyChannelCoordinator', () => {
     expect(proxyChannelCoordinator.getStickyChannelId(key)).toBeNull();
   });
 
+  it('builds api-key sticky keys without a session id and per downstream key + model', () => {
+    expect(proxyChannelCoordinator.buildApiKeyStickyKey({
+      requestedModel: 'GPT-5.2',
+      downstreamApiKeyId: 9,
+    })).toBe('keysticky|key:9|gpt-5.2');
+
+    expect(proxyChannelCoordinator.buildApiKeyStickyKey({
+      requestedModel: 'gpt-5.2',
+      downstreamApiKeyId: 10,
+    })).not.toBe(proxyChannelCoordinator.buildApiKeyStickyKey({
+      requestedModel: 'gpt-5.2',
+      downstreamApiKeyId: 9,
+    }));
+
+    expect(proxyChannelCoordinator.buildApiKeyStickyKey({
+      requestedModel: 'gpt-5.2',
+      downstreamApiKeyId: 9,
+    })).not.toBe(proxyChannelCoordinator.buildApiKeyStickyKey({
+      requestedModel: 'claude-sonnet-4',
+      downstreamApiKeyId: 9,
+    }));
+
+    expect(proxyChannelCoordinator.buildApiKeyStickyKey({
+      requestedModel: 'gpt-5.2',
+    })).toBe('keysticky|key:anonymous|gpt-5.2');
+  });
+
+  it('binds api-key sticky channels for apikey-only channels and expires them by ttl', async () => {
+    const key = proxyChannelCoordinator.buildApiKeyStickyKey({
+      requestedModel: 'gpt-5.2',
+      downstreamApiKeyId: 9,
+    });
+
+    proxyChannelCoordinator.bindApiKeyStickyChannel(key, 42);
+    expect(proxyChannelCoordinator.getStickyChannelId(key)).toBe(42);
+
+    await vi.advanceTimersByTimeAsync(20_000);
+    proxyChannelCoordinator.bindApiKeyStickyChannel(key, 42);
+    await vi.advanceTimersByTimeAsync(20_000);
+    expect(proxyChannelCoordinator.getStickyChannelId(key)).toBe(42);
+
+    await vi.advanceTimersByTimeAsync(31_100);
+    expect(proxyChannelCoordinator.getStickyChannelId(key)).toBeNull();
+  });
+
   it('treats structured oauth providers as session-scoped even when extraConfig omits oauth.provider', () => {
     const key = proxyChannelCoordinator.buildStickySessionKey({
       clientKind: 'codex',

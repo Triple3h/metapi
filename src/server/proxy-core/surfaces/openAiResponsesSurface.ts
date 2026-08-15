@@ -74,6 +74,7 @@ import { shouldAbortSameSiteEndpointFallback } from '../../services/proxyRetryPo
 import {
   acquireSurfaceChannelLease,
   bindSurfaceStickyChannel,
+  buildSurfaceApiKeyStickyKey,
   buildSurfaceChannelBusyMessage,
   buildSurfaceStickySessionKey,
   clearSurfaceStickyChannel,
@@ -322,6 +323,10 @@ export async function handleOpenAiResponsesSurfaceRequest(
       downstreamPath,
       downstreamApiKeyId,
     });
+    const apiKeyStickyKey = buildSurfaceApiKeyStickyKey({
+      requestedModel,
+      downstreamApiKeyId,
+    });
     const debugTrace = await startSurfaceProxyDebugTrace({
       downstreamPath,
       clientKind: clientContext.clientKind,
@@ -365,6 +370,7 @@ export async function handleOpenAiResponsesSurfaceRequest(
         excludeChannelIds,
         retryCount,
         stickySessionKey,
+        apiKeyStickyKey,
         forcedChannelId,
       });
 

@@ -158,6 +158,19 @@ class ProxyChannelCoordinator {
     return [owner, clientKind, downstreamPath, requestedModel, sessionId].join('|');
   }
 
+  buildApiKeyStickyKey(input: {
+    requestedModel: string;
+    downstreamApiKeyId?: number | null;
+  }): string | null {
+    if (!config.proxyStickySessionEnabled) return null;
+    const requestedModel = String(input.requestedModel || '').trim().toLowerCase();
+    if (!requestedModel) return null;
+    const owner = typeof input.downstreamApiKeyId === 'number' && Number.isFinite(input.downstreamApiKeyId)
+      ? `key:${Math.trunc(input.downstreamApiKeyId)}`
+      : 'key:anonymous';
+    return ['keysticky', owner, requestedModel].join('|');
+  }
+
   getStickyChannelId(stickySessionKey?: string | null, nowMs = Date.now()): number | null {
     cleanupExpiredStickyBindings(nowMs);
     const normalizedKey = String(stickySessionKey || '').trim();
@@ -174,6 +187,17 @@ class ProxyChannelCoordinator {
     if (!config.proxyStickySessionEnabled) return;
     if (!isSessionScopedChannel(accountIdentity)) return;
     const normalizedKey = String(stickySessionKey || '').trim();
+    if (!normalizedKey || !Number.isFinite(channelId) || channelId <= 0) return;
+    cleanupExpiredStickyBindings();
+    stickySessionBindings.set(normalizedKey, {
+      channelId: Math.trunc(channelId),
+      expiresAtMs: Date.now() + getStickySessionTtlMs(),
+    });
+  }
+
+  bindApiKeyStickyChannel(apiKeyStickyKey: string | null | undefined, channelId: number): void {
+    if (!config.proxyStickySessionEnabled) return;
+    const normalizedKey = String(apiKeyStickyKey || '').trim();
     if (!normalizedKey || !Number.isFinite(channelId) || channelId <= 0) return;
     cleanupExpiredStickyBindings();
     stickySessionBindings.set(normalizedKey, {

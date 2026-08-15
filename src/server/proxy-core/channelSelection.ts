@@ -87,6 +87,7 @@ export async function selectProxyChannelForAttempt(input: {
   excludeChannelIds: number[];
   retryCount: number;
   stickySessionKey?: string | null;
+  apiKeyStickyKey?: string | null;
   forcedChannelId?: number | null;
 }): Promise<SelectedChannel> {
   const normalizedForcedChannelId = normalizeForcedChannelId(input.forcedChannelId);
@@ -115,28 +116,39 @@ export async function selectProxyChannelForAttempt(input: {
     }
   };
 
-  if (input.retryCount === 0 && input.stickySessionKey) {
-    const preferredChannelId = proxyChannelCoordinator.getStickyChannelId(input.stickySessionKey);
-    if (preferredChannelId && !input.excludeChannelIds.includes(preferredChannelId)) {
-      selected = await tokenRouter.selectPreferredChannel(
+  const selectViaStickyBinding = async (stickyKey: string): Promise<SelectedChannel> => {
+    const preferredChannelId = proxyChannelCoordinator.getStickyChannelId(stickyKey);
+    if (!preferredChannelId || input.excludeChannelIds.includes(preferredChannelId)) return null;
+    let preferred = await tokenRouter.selectPreferredChannel(
+      input.requestedModel,
+      preferredChannelId,
+      input.downstreamPolicy,
+      input.excludeChannelIds,
+    );
+    if (!preferred) {
+      const refreshSucceeded = await refreshRoutesForFirstAttempt();
+      preferred = await tokenRouter.selectPreferredChannel(
         input.requestedModel,
         preferredChannelId,
         input.downstreamPolicy,
         input.excludeChannelIds,
       );
-      if (!selected) {
-        const refreshSucceeded = await refreshRoutesForFirstAttempt();
-        selected = await tokenRouter.selectPreferredChannel(
-          input.requestedModel,
-          preferredChannelId,
-          input.downstreamPolicy,
-          input.excludeChannelIds,
-        );
-        if (!selected && refreshSucceeded) {
-          proxyChannelCoordinator.clearStickyChannel(input.stickySessionKey, preferredChannelId);
-        }
+      if (!preferred && refreshSucceeded) {
+        proxyChannelCoordinator.clearStickyChannel(stickyKey, preferredChannelId);
       }
     }
+    return preferred;
+  };
+
+  const keyStickyEligible = input.apiKeyStickyKey
+    && (await tokenRouter.getRouteStrategyForModel(input.requestedModel, input.downstreamPolicy)) === 'key_sticky';
+
+  if (input.retryCount === 0 && keyStickyEligible && input.apiKeyStickyKey) {
+    selected = await selectViaStickyBinding(input.apiKeyStickyKey);
+  }
+
+  if (!selected && input.retryCount === 0 && input.stickySessionKey) {
+    selected = await selectViaStickyBinding(input.stickySessionKey);
   }
 
   if (!selected) {
@@ -152,6 +164,10 @@ export async function selectProxyChannelForAttempt(input: {
   if (!selected && input.retryCount === 0 && !refreshedRoutes) {
     await refreshRoutesForFirstAttempt();
     selected = await tokenRouter.selectChannel(input.requestedModel, input.downstreamPolicy);
+  }
+
+  if (selected && keyStickyEligible && input.apiKeyStickyKey) {
+    proxyChannelCoordinator.bindApiKeyStickyChannel(input.apiKeyStickyKey, selected.channel.id);
   }
 
   return selected;

@@ -39,6 +39,7 @@ vi.mock('../../services/tokenRouter.js', () => ({
     selectNextChannel: (...args: unknown[]) => selectNextChannelMock(...args),
     recordSuccess: (...args: unknown[]) => recordSuccessMock(...args),
     recordFailure: (...args: unknown[]) => recordFailureMock(...args),
+    getRouteStrategyForModel: async () => 'weighted',
   },
 }));
 

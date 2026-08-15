@@ -16,6 +16,7 @@ vi.mock('../../services/siteProxy.js', () => ({
 vi.mock('../../services/tokenRouter.js', () => ({
   tokenRouter: {
     recordFailure: vi.fn(),
+    getRouteStrategyForModel: async () => 'weighted',
     recordSuccess: vi.fn(),
   },
 }));

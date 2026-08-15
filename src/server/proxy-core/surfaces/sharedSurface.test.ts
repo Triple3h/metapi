@@ -4,6 +4,7 @@ import { EMPTY_DOWNSTREAM_ROUTING_POLICY } from '../../services/downstreamPolicy
 const selectChannelMock = vi.fn();
 const selectNextChannelMock = vi.fn();
 const selectPreferredChannelMock = vi.fn();
+const getRouteStrategyForModelMock = vi.fn();
 const recordFailureMock = vi.fn();
 const refreshModelsAndRebuildRoutesMock = vi.fn();
 const composeProxyLogMessageMock = vi.fn();
@@ -27,6 +28,8 @@ const bindStickyChannelMock = vi.fn();
 const clearStickyChannelMock = vi.fn();
 const acquireChannelLeaseMock = vi.fn();
 const buildStickySessionKeyMock = vi.fn();
+const buildApiKeyStickyKeyMock = vi.fn();
+const bindApiKeyStickyChannelMock = vi.fn();
 const consoleWarnMock = vi.spyOn(console, 'warn').mockImplementation(() => {});
 const consoleErrorMock = vi.spyOn(console, 'error').mockImplementation(() => {});
 
@@ -35,6 +38,7 @@ vi.mock('../../services/tokenRouter.js', () => ({
     selectChannel: (...args: unknown[]) => selectChannelMock(...args),
     selectNextChannel: (...args: unknown[]) => selectNextChannelMock(...args),
     selectPreferredChannel: (...args: unknown[]) => selectPreferredChannelMock(...args),
+    getRouteStrategyForModel: (...args: unknown[]) => getRouteStrategyForModelMock(...args),
     recordFailure: (...args: unknown[]) => recordFailureMock(...args),
     recordSuccess: (...args: unknown[]) => recordSuccessMock(...args),
   },
@@ -47,6 +51,8 @@ vi.mock('../../services/proxyChannelCoordinator.js', () => ({
     clearStickyChannel: (...args: unknown[]) => clearStickyChannelMock(...args),
     acquireChannelLease: (...args: unknown[]) => acquireChannelLeaseMock(...args),
     buildStickySessionKey: (...args: unknown[]) => buildStickySessionKeyMock(...args),
+    buildApiKeyStickyKey: (...args: unknown[]) => buildApiKeyStickyKeyMock(...args),
+    bindApiKeyStickyChannel: (...args: unknown[]) => bindApiKeyStickyChannelMock(...args),
   },
 }));
 
@@ -139,6 +145,9 @@ describe('selectSurfaceChannelForAttempt', () => {
     clearStickyChannelMock.mockReset();
     acquireChannelLeaseMock.mockReset();
     buildStickySessionKeyMock.mockReset();
+    buildApiKeyStickyKeyMock.mockReset();
+    bindApiKeyStickyChannelMock.mockReset();
+    getRouteStrategyForModelMock.mockReset();
     consoleWarnMock.mockClear();
     consoleErrorMock.mockClear();
   });
@@ -208,6 +217,99 @@ describe('selectSurfaceChannelForAttempt', () => {
     );
     expect(selectChannelMock).not.toHaveBeenCalled();
     expect(clearStickyChannelMock).not.toHaveBeenCalled();
+  });
+
+  it('binds the api-key sticky channel after a fresh key_sticky selection', async () => {
+    const selected = { channel: { id: 33 } };
+    getRouteStrategyForModelMock.mockResolvedValueOnce('key_sticky');
+    getStickyChannelIdMock.mockReturnValueOnce(null);
+    selectChannelMock.mockResolvedValueOnce(selected);
+
+    const { selectSurfaceChannelForAttempt } = await import('./sharedSurface.js');
+    const result = await selectSurfaceChannelForAttempt({
+      requestedModel: 'gpt-5.2',
+      downstreamPolicy: EMPTY_DOWNSTREAM_ROUTING_POLICY,
+      excludeChannelIds: [],
+      retryCount: 0,
+      apiKeyStickyKey: 'keysticky|key:9|gpt-5.2',
+    });
+
+    expect(result).toBe(selected);
+    expect(getRouteStrategyForModelMock).toHaveBeenCalledWith(
+      'gpt-5.2',
+      EMPTY_DOWNSTREAM_ROUTING_POLICY,
+    );
+    expect(selectPreferredChannelMock).not.toHaveBeenCalled();
+    expect(bindApiKeyStickyChannelMock).toHaveBeenCalledWith('keysticky|key:9|gpt-5.2', 33);
+  });
+
+  it('reuses the bound api-key sticky channel on later key_sticky requests', async () => {
+    const selected = { channel: { id: 33 } };
+    getRouteStrategyForModelMock.mockResolvedValueOnce('key_sticky');
+    getStickyChannelIdMock.mockReturnValueOnce(33);
+    selectPreferredChannelMock.mockResolvedValueOnce(selected);
+
+    const { selectSurfaceChannelForAttempt } = await import('./sharedSurface.js');
+    const result = await selectSurfaceChannelForAttempt({
+      requestedModel: 'gpt-5.2',
+      downstreamPolicy: EMPTY_DOWNSTREAM_ROUTING_POLICY,
+      excludeChannelIds: [],
+      retryCount: 0,
+      apiKeyStickyKey: 'keysticky|key:9|gpt-5.2',
+    });
+
+    expect(result).toBe(selected);
+    expect(selectPreferredChannelMock).toHaveBeenCalledWith(
+      'gpt-5.2',
+      33,
+      EMPTY_DOWNSTREAM_ROUTING_POLICY,
+      [],
+    );
+    expect(selectChannelMock).not.toHaveBeenCalled();
+    expect(bindApiKeyStickyChannelMock).toHaveBeenCalledWith('keysticky|key:9|gpt-5.2', 33);
+  });
+
+  it('clears a stale api-key sticky binding and falls back to a fresh selection', async () => {
+    const selected = { channel: { id: 44 } };
+    getRouteStrategyForModelMock.mockResolvedValueOnce('key_sticky');
+    getStickyChannelIdMock.mockReturnValueOnce(33);
+    selectPreferredChannelMock
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(null);
+    refreshModelsAndRebuildRoutesMock.mockResolvedValueOnce(true);
+    selectChannelMock.mockResolvedValueOnce(selected);
+
+    const { selectSurfaceChannelForAttempt } = await import('./sharedSurface.js');
+    const result = await selectSurfaceChannelForAttempt({
+      requestedModel: 'gpt-5.2',
+      downstreamPolicy: EMPTY_DOWNSTREAM_ROUTING_POLICY,
+      excludeChannelIds: [],
+      retryCount: 0,
+      apiKeyStickyKey: 'keysticky|key:9|gpt-5.2',
+    });
+
+    expect(result).toBe(selected);
+    expect(clearStickyChannelMock).toHaveBeenCalledWith('keysticky|key:9|gpt-5.2', 33);
+    expect(bindApiKeyStickyChannelMock).toHaveBeenCalledWith('keysticky|key:9|gpt-5.2', 44);
+  });
+
+  it('skips api-key sticky binding when the route uses another strategy', async () => {
+    const selected = { channel: { id: 33 } };
+    getRouteStrategyForModelMock.mockResolvedValueOnce('weighted');
+    selectChannelMock.mockResolvedValueOnce(selected);
+
+    const { selectSurfaceChannelForAttempt } = await import('./sharedSurface.js');
+    const result = await selectSurfaceChannelForAttempt({
+      requestedModel: 'gpt-5.2',
+      downstreamPolicy: EMPTY_DOWNSTREAM_ROUTING_POLICY,
+      excludeChannelIds: [],
+      retryCount: 0,
+      apiKeyStickyKey: 'keysticky|key:9|gpt-5.2',
+    });
+
+    expect(result).toBe(selected);
+    expect(getStickyChannelIdMock).not.toHaveBeenCalled();
+    expect(bindApiKeyStickyChannelMock).not.toHaveBeenCalled();
   });
 
   it('uses the forced tester channel before sticky or automatic selection', async () => {

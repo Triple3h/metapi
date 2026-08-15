@@ -104,6 +104,7 @@ function prefersReducedMotion(): boolean {
 function getRouteRoutingStrategySuccessMessage(value: RouteRoutingStrategy): string {
   if (value === 'round_robin') return '已切换为轮询策略';
   if (value === 'stable_first') return '已切换为稳定优先策略';
+  if (value === 'key_sticky') return '已切换为 Key 粘性策略';
   return '已切换为权重随机策略';
 }
 

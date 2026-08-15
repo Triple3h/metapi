@@ -6,7 +6,7 @@ export type { RouteDecision, RouteDecisionCandidate, RouteMode } from '../../../
 export type RouteSortBy = 'modelPattern' | 'channelCount';
 export type RouteSortDir = 'asc' | 'desc';
 export type GroupFilter = null | '__all__' | number;
-export type RouteRoutingStrategy = 'weighted' | 'round_robin' | 'stable_first';
+export type RouteRoutingStrategy = 'weighted' | 'round_robin' | 'stable_first' | 'key_sticky';
 export type OAuthRouteUnitStrategy = 'round_robin' | 'stick_until_unavailable';
 export type RouteRowKind = 'persisted' | 'zero_channel';
 export type RouteChannelDraft = {

@@ -602,6 +602,11 @@ function RouteCardInner({
       label: tr('稳定优先'),
       description: getRouteRoutingStrategyDescription('stable_first'),
     },
+    {
+      value: 'key_sticky',
+      label: tr('Key 粘性'),
+      description: getRouteRoutingStrategyDescription('key_sticky'),
+    },
   ] as const;
 
   const sensors = useSensors(

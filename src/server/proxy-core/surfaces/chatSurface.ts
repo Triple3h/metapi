@@ -57,6 +57,7 @@ import { maybeHandleWebSearchOnlySimulation } from '../webSearchSimulation.js';
 import {
   acquireSurfaceChannelLease,
   bindSurfaceStickyChannel,
+  buildSurfaceApiKeyStickyKey,
   buildSurfaceChannelBusyMessage,
   buildSurfaceStickySessionKey,
   clearSurfaceStickyChannel,
@@ -202,6 +203,10 @@ export async function handleChatSurfaceRequest(
     downstreamPath,
     downstreamApiKeyId,
   });
+  const apiKeyStickyKey = buildSurfaceApiKeyStickyKey({
+    requestedModel,
+    downstreamApiKeyId,
+  });
   const debugTrace = await startSurfaceProxyDebugTrace({
     downstreamPath,
     clientKind: clientContext.clientKind,
@@ -246,6 +251,7 @@ export async function handleChatSurfaceRequest(
       excludeChannelIds,
       retryCount,
       stickySessionKey,
+      apiKeyStickyKey,
       forcedChannelId,
     });
 
@@ -1145,6 +1151,10 @@ export async function handleClaudeCountTokensSurfaceRequest(
     downstreamPath,
     downstreamApiKeyId,
   });
+  const apiKeyStickyKey = buildSurfaceApiKeyStickyKey({
+    requestedModel,
+    downstreamApiKeyId,
+  });
   const debugTrace = await startSurfaceProxyDebugTrace({
     downstreamPath,
     clientKind: clientContext.clientKind,
@@ -1188,6 +1198,7 @@ export async function handleClaudeCountTokensSurfaceRequest(
       excludeChannelIds,
       retryCount,
       stickySessionKey,
+      apiKeyStickyKey,
       forcedChannelId,
     });
 

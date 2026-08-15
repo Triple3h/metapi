@@ -179,4 +179,55 @@ describe('TokenRoutes routing strategy updates', () => {
       root?.unmount();
     }
   });
+
+  it('supports switching to key_sticky and keeps the optimistic label when refresh fails', async () => {
+    let root!: WebTestRenderer;
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/routes']}>
+            <ToastProvider>
+              <TokenRoutes />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const expandButton = root.root.find((node) => (
+        node.type === 'div'
+        && String(node.props.className || '').includes('route-card-collapsed')
+      ));
+      await act(async () => {
+        expandButton.props.onClick();
+      });
+      await flushMicrotasks();
+
+      apiMock.getRoutesSummary.mockRejectedValueOnce(new Error('refresh failed'));
+
+      const keyStickyOption = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.className === 'string'
+        && node.props.className.includes('modern-select-option')
+        && collectText(node).startsWith('Key 粘性')
+      ));
+
+      await act(async () => {
+        keyStickyOption.props.onClick();
+      });
+      await flushMicrotasks();
+
+      expect(apiMock.updateRoute).toHaveBeenCalledWith(1, { routingStrategy: 'key_sticky' });
+
+      const strategyTrigger = root.root.find((node) => (
+        node.type === 'button'
+        && typeof node.props.className === 'string'
+        && node.props.className.includes('modern-select-trigger')
+        && collectText(node).startsWith('Key 粘性')
+      ));
+      expect(collectText(strategyTrigger)).toContain('Key 粘性');
+    } finally {
+      root?.unmount();
+    }
+  });
 });

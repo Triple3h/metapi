@@ -75,6 +75,7 @@ vi.mock('../../services/tokenRouter.js', () => ({
     selectPreferredChannel: (...args: unknown[]) => selectPreferredChannelMock(...args),
     recordSuccess: (...args: unknown[]) => recordSuccessMock(...args),
     recordFailure: (...args: unknown[]) => recordFailureMock(...args),
+    getRouteStrategyForModel: async () => 'weighted',
     explainSelection: (...args: unknown[]) => explainSelectionMock(...args),
   },
   invalidateTokenRouterCache: (...args: unknown[]) => invalidateTokenRouterCacheMock(...args),
