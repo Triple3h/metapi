@@ -22,10 +22,10 @@ concurrency:
 
 jobs:
   publish-dockerhub:
-    name: Publish Docker Hub Image (linux/amd64)
+    name: Publish Docker Hub Image (linux/amd64, linux/arm64)
     # GitHub 托管 runner：公开仓库免费不限时长，推 Docker Hub 网络通畅
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -53,13 +53,13 @@ jobs:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 只构建 linux/amd64（部署目标是腾讯云 x86 服务器），走 GHA 缓存加速
+      # 构建 linux/amd64 + linux/arm64（支持 x86 服务器和 Apple Silicon Mac 本地部署），走 GHA 缓存加速
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: docker/Dockerfile
-          platforms: linux/amd64
+          platforms: linux/amd64,linux/arm64
           push: true
           tags: |
             ${{ secrets.DOCKERHUB_USERNAME }}/metapi:latest
