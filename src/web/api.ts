@@ -508,6 +508,48 @@ export type ProxyLogsQuery = {
   siteId?: number;
   from?: string;
   to?: string;
+  model?: string;
+  downstreamKeyId?: number;
+  group?: string;
+  stream?: string;
+};
+
+export type ProxyLogsAnalyticsDistributionItem = {
+  key: string;
+  label: string;
+  requests: number;
+  tokens: number;
+  actualCost: number;
+};
+
+export type ProxyLogsAnalyticsTrendPoint = {
+  bucketStart: string;
+  label: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  cacheHitRate: number | null;
+};
+
+export type ProxyLogsAnalytics = {
+  range: { fromUtc: string; toUtc: string; granularity: "hour" | "day" };
+  stats: {
+    totalRequests: number;
+    successCount: number;
+    failedCount: number;
+    promptTokens: number;
+    completionTokens: number;
+    totalTokens: number;
+    cacheReadTokens: number;
+    cacheCreationTokens: number;
+    totalCost: number;
+    averageLatencyMs: number | null;
+  };
+  trend: ProxyLogsAnalyticsTrendPoint[];
+  modelStats: ProxyLogsAnalyticsDistributionItem[];
+  groupStats: ProxyLogsAnalyticsDistributionItem[];
+  siteStats: ProxyLogsAnalyticsDistributionItem[];
 };
 
 export type ProxyLogClientOption = {
@@ -1078,6 +1120,12 @@ export const api = {
       sites: Array<{ id: number; name: string; status?: string | null }>;
     }>;
   },
+  getProxyLogsAnalytics: (params?: Omit<ProxyLogsQuery, "limit" | "offset"> & {
+    granularity?: "hour" | "day";
+  }) =>
+    request(
+      `/api/stats/proxy-logs/analytics${buildQueryString(params)}`,
+    ) as Promise<ProxyLogsAnalytics>,
   getProxyLogDetail: (id: number) =>
     request(`/api/stats/proxy-logs/${id}`) as Promise<ProxyLogDetail>,
   getProxyDebugTraces: (params?: { limit?: number }) =>
@@ -1212,19 +1260,6 @@ export const api = {
     request(`/api/events/${id}/read`, { method: "POST" }),
   markAllEventsRead: () => request("/api/events/read-all", { method: "POST" }),
   clearEvents: () => request("/api/events", { method: "DELETE" }),
-  getSiteAnnouncements: (params?: string) =>
-    request(`/api/site-announcements${params ? "?" + params : ""}`),
-  markSiteAnnouncementRead: (id: number) =>
-    request(`/api/site-announcements/${id}/read`, { method: "POST" }),
-  markAllSiteAnnouncementsRead: () =>
-    request("/api/site-announcements/read-all", { method: "POST" }),
-  clearSiteAnnouncements: () =>
-    request("/api/site-announcements", { method: "DELETE" }),
-  syncSiteAnnouncements: (payload?: { siteId?: number }) =>
-    request("/api/site-announcements/sync", {
-      method: "POST",
-      body: JSON.stringify(payload || {}),
-    }),
   getTasks: (limit = 50) =>
     request(
       `/api/tasks?limit=${Math.max(1, Math.min(200, Math.trunc(limit)))}`,
@@ -1405,15 +1440,6 @@ export const api = {
     request("/api/settings/maintenance/factory-reset", { method: "POST" }),
   testNotification: () =>
     request("/api/settings/notify/test", { method: "POST" }),
-
-  // Monitor embed
-  getMonitorConfig: () => request("/api/monitor/config"),
-  updateMonitorConfig: (data: { ldohCookie?: string | null }) =>
-    request("/api/monitor/config", {
-      method: "PUT",
-      body: JSON.stringify(data),
-    }),
-  initMonitorSession: () => request("/api/monitor/session", { method: "POST" }),
 
   // Models marketplace
   getModelsMarketplace: (options?: {

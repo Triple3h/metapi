@@ -34,7 +34,6 @@ describe('backupService', () => {
     await db.delete(schema.modelAvailability).run();
     await db.delete(schema.proxyLogs).run();
     await db.delete(schema.checkinLogs).run();
-    await db.delete(schema.siteAnnouncements).run();
     await db.delete(schema.siteDisabledModels).run();
     await db.delete(schema.accountTokens).run();
     await db.delete(schema.accounts).run();
@@ -663,20 +662,6 @@ describe('backupService', () => {
       checkedAt: exportedAt,
     }).run();
 
-    await db.insert(schema.siteAnnouncements).values({
-      siteId: site.id,
-      platform: 'new-api',
-      sourceKey: 'notice-1',
-      title: 'Backup banner',
-      content: 'Backup content',
-      level: 'info',
-      firstSeenAt: exportedAt,
-      lastSeenAt: exportedAt,
-      readAt: null,
-      dismissedAt: null,
-      rawPayload: '{"revision":"backup"}',
-    }).run();
-
     const downstreamKey = await db.insert(schema.downstreamApiKeys).values({
       name: 'Backup Downstream',
       key: 'downstream-shared',
@@ -817,15 +802,6 @@ describe('backupService', () => {
       checkedAt: localRuntimeAt,
     }).where(eq(schema.tokenModelAvailability.tokenId, accountToken.id)).run();
 
-    await db.update(schema.siteAnnouncements).set({
-      title: 'Local banner',
-      content: 'Local content',
-      lastSeenAt: localRuntimeAt,
-      readAt: localRuntimeAt,
-      dismissedAt: localRuntimeAt,
-      rawPayload: '{"revision":"local"}',
-    }).where(eq(schema.siteAnnouncements.siteId, site.id)).run();
-
     await db.update(schema.downstreamApiKeys).set({
       name: 'Local Mutated Downstream',
       description: 'local config',
@@ -908,7 +884,6 @@ describe('backupService', () => {
     const restoredDisabledModels = await db.select().from(schema.siteDisabledModels).all();
     const restoredAvailability = await db.select().from(schema.modelAvailability).all();
     const restoredTokenAvailability = await db.select().from(schema.tokenModelAvailability).all();
-    const restoredAnnouncements = await db.select().from(schema.siteAnnouncements).all();
     const restoredDownstreamKeys = await db.select().from(schema.downstreamApiKeys).all();
     const restoredProxyLogs = await db.select().from(schema.proxyLogs).all();
     const restoredCheckinLogs = await db.select().from(schema.checkinLogs).all();
@@ -974,18 +949,6 @@ describe('backupService', () => {
         available: true,
         latencyMs: 888,
         checkedAt: localRuntimeAt,
-      }),
-    ]);
-
-    expect(restoredAnnouncements).toEqual([
-      expect.objectContaining({
-        siteId: site.id,
-        title: 'Local banner',
-        content: 'Local content',
-        lastSeenAt: localRuntimeAt,
-        readAt: localRuntimeAt,
-        dismissedAt: localRuntimeAt,
-        rawPayload: '{"revision":"local"}',
       }),
     ]);
 

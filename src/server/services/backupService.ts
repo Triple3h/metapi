@@ -50,7 +50,6 @@ type TokenModelAvailabilityRow = typeof schema.tokenModelAvailability.$inferSele
 type ProxyLogRow = typeof schema.proxyLogs.$inferSelect;
 type CheckinLogRow = typeof schema.checkinLogs.$inferSelect;
 type DownstreamApiKeyRow = typeof schema.downstreamApiKeys.$inferSelect;
-type SiteAnnouncementRow = typeof schema.siteAnnouncements.$inferSelect;
 
 type BackupAccountRow = Omit<AccountRow, 'balanceUsed' | 'lastCheckinAt' | 'lastBalanceRefresh'>
   & Partial<Pick<AccountRow, 'balanceUsed' | 'lastCheckinAt' | 'lastBalanceRefresh'>>;
@@ -173,10 +172,6 @@ type CheckinLogSnapshot = CheckinLogRow & {
   accountKey: string | null;
 };
 
-type SiteAnnouncementSnapshot = SiteAnnouncementRow & {
-  siteKey: string | null;
-};
-
 type ModelAvailabilitySnapshot = ModelAvailabilityRow & {
   accountKey: string | null;
 };
@@ -203,7 +198,6 @@ interface RuntimeIdentityIndexes {
 interface RuntimeStateSnapshot {
   accountRuntimeByKey: Map<string, AccountRuntimeSnapshot>;
   routeChannelRuntimeByKey: Map<string, RouteChannelRuntimeSnapshot>;
-  siteAnnouncements: SiteAnnouncementSnapshot[];
   nonManualAvailability: ModelAvailabilitySnapshot[];
   tokenAvailability: TokenModelAvailabilitySnapshot[];
   downstreamApiKeyRuntimeByKey: Map<string, DownstreamApiKeyRuntimeSnapshot>;
@@ -461,7 +455,6 @@ async function collectCurrentRuntimeStateSnapshot(): Promise<RuntimeStateSnapsho
     routeChannels,
     proxyLogs,
     checkinLogs,
-    siteAnnouncements,
     modelAvailability,
     tokenModelAvailability,
     downstreamApiKeys,
@@ -473,7 +466,6 @@ async function collectCurrentRuntimeStateSnapshot(): Promise<RuntimeStateSnapsho
     db.select().from(schema.routeChannels).all(),
     db.select().from(schema.proxyLogs).all(),
     db.select().from(schema.checkinLogs).all(),
-    db.select().from(schema.siteAnnouncements).all(),
     db.select().from(schema.modelAvailability).all(),
     db.select().from(schema.tokenModelAvailability).all(),
     db.select().from(schema.downstreamApiKeys).all(),
@@ -561,10 +553,6 @@ async function collectCurrentRuntimeStateSnapshot(): Promise<RuntimeStateSnapsho
   return {
     accountRuntimeByKey,
     routeChannelRuntimeByKey,
-    siteAnnouncements: siteAnnouncements.map((row) => ({
-      ...row,
-      siteKey: siteKeyById.get(row.siteId) || null,
-    })),
     nonManualAvailability: modelAvailability
       .filter((row) => !row.isManual)
       .map((row) => ({
@@ -1732,31 +1720,6 @@ async function importAccountsSection(section: AccountsBackupSection): Promise<vo
         available: row.available,
         latencyMs: row.latencyMs ?? null,
         checkedAt: row.checkedAt,
-      }).run();
-    }
-
-    for (const row of runtimeState.siteAnnouncements) {
-      if (!row.siteKey) continue;
-      const siteId = importedIndexes.siteIdByKey.get(row.siteKey);
-      if (!siteId) continue;
-
-      await tx.insert(schema.siteAnnouncements).values({
-        siteId,
-        platform: row.platform,
-        sourceKey: row.sourceKey,
-        title: row.title,
-        content: row.content,
-        level: row.level,
-        sourceUrl: row.sourceUrl ?? null,
-        startsAt: row.startsAt ?? null,
-        endsAt: row.endsAt ?? null,
-        upstreamCreatedAt: row.upstreamCreatedAt ?? null,
-        upstreamUpdatedAt: row.upstreamUpdatedAt ?? null,
-        firstSeenAt: row.firstSeenAt ?? null,
-        lastSeenAt: row.lastSeenAt ?? null,
-        readAt: row.readAt ?? null,
-        dismissedAt: row.dismissedAt ?? null,
-        rawPayload: row.rawPayload ?? null,
       }).run();
     }
 

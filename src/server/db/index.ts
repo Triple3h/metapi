@@ -41,7 +41,6 @@ const TABLES_WITH_NUMERIC_ID = new Set([
   'proxy_video_tasks',
   'proxy_files',
   'downstream_api_keys',
-  'site_announcements',
   'events',
 ]);
 

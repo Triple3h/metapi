@@ -104,3 +104,11 @@ export function formatCheckinLogTime(
 ): string {
   return formatDateTimeLocal(value, locale, timeZone);
 }
+
+export function readClientTimeZone(): string | undefined {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined;
+  } catch {
+    return undefined;
+  }
+}

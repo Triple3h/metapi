@@ -30,7 +30,6 @@ type BackupSnapshot = {
   accounts: {
     sites: Array<Record<string, unknown>>;
     siteApiEndpoints: Array<Record<string, unknown>>;
-    siteAnnouncements: Array<Record<string, unknown>>;
     siteDisabledModels: Array<Record<string, unknown>>;
     accounts: Array<Record<string, unknown>>;
     accountTokens: Array<Record<string, unknown>>;
@@ -60,7 +59,6 @@ export interface DatabaseMigrationSummary {
   rows: {
     sites: number;
     siteApiEndpoints: number;
-    siteAnnouncements: number;
     siteDisabledModels: number;
     accounts: number;
     accountTokens: number;
@@ -254,7 +252,6 @@ async function toBackupSnapshot(): Promise<BackupSnapshot> {
     accounts: {
       sites: await db.select().from(schema.sites).all() as Array<Record<string, unknown>>,
       siteApiEndpoints: await db.select().from(schema.siteApiEndpoints).all() as Array<Record<string, unknown>>,
-      siteAnnouncements: await db.select().from(schema.siteAnnouncements).all() as Array<Record<string, unknown>>,
       siteDisabledModels: await db.select().from(schema.siteDisabledModels).all() as Array<Record<string, unknown>>,
       accounts: await db.select().from(schema.accounts).all() as Array<Record<string, unknown>>,
       accountTokens: await db.select().from(schema.accountTokens).all() as Array<Record<string, unknown>>,
@@ -300,7 +297,6 @@ async function clearTargetData(client: SqlClient): Promise<void> {
     'proxy_files',
     'account_tokens',
     'accounts',
-    'site_announcements',
     'site_disabled_models',
     'site_api_endpoints',
     'token_routes',
@@ -385,50 +381,6 @@ function buildStatements(
         asNumber(row.siteId, 0),
         asNullableString(row.modelName),
         asNullableString(row.createdAt),
-      ],
-    });
-  }
-
-  for (const row of snapshot.accounts.siteAnnouncements || []) {
-    statements.push({
-      table: 'site_announcements',
-      columns: [
-        'id',
-        'site_id',
-        'platform',
-        'source_key',
-        'title',
-        'content',
-        'level',
-        'source_url',
-        'starts_at',
-        'ends_at',
-        'upstream_created_at',
-        'upstream_updated_at',
-        'first_seen_at',
-        'last_seen_at',
-        'read_at',
-        'dismissed_at',
-        'raw_payload',
-      ],
-      values: [
-        asNumber(row.id, 0),
-        asNumber(row.siteId, 0),
-        asNullableString(row.platform),
-        asNullableString(row.sourceKey),
-        asNullableString(row.title),
-        asNullableString(row.content),
-        asNullableString(row.level) ?? 'info',
-        asNullableString(row.sourceUrl),
-        asNullableString(row.startsAt),
-        asNullableString(row.endsAt),
-        asNullableString(row.upstreamCreatedAt),
-        asNullableString(row.upstreamUpdatedAt),
-        asNullableString(row.firstSeenAt),
-        asNullableString(row.lastSeenAt),
-        asNullableString(row.readAt),
-        asNullableString(row.dismissedAt),
-        asNullableString(row.rawPayload),
       ],
     });
   }
@@ -747,7 +699,6 @@ async function syncPostgresSequences(client: SqlClient): Promise<void> {
   const tables = [
     'sites',
     'site_api_endpoints',
-    'site_announcements',
     'site_disabled_models',
     'accounts',
     'account_tokens',
@@ -816,7 +767,6 @@ export async function migrateCurrentDatabase(input: DatabaseMigrationInput): Pro
     rows: {
       sites: snapshot.accounts.sites.length,
       siteApiEndpoints: snapshot.accounts.siteApiEndpoints.length,
-      siteAnnouncements: snapshot.accounts.siteAnnouncements.length,
       siteDisabledModels: snapshot.accounts.siteDisabledModels.length,
       accounts: snapshot.accounts.accounts.length,
       accountTokens: snapshot.accounts.accountTokens.length,

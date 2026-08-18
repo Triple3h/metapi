@@ -15,7 +15,6 @@ function createDbSchemaMock() {
     settings: { __table: 'settings' },
     sites: { __table: 'sites' },
     siteApiEndpoints: { __table: 'siteApiEndpoints' },
-    siteAnnouncements: { __table: 'siteAnnouncements' },
     siteDisabledModels: { __table: 'siteDisabledModels' },
     accounts: { __table: 'accounts' },
     accountTokens: { __table: 'accountTokens' },
@@ -216,7 +215,6 @@ describe('databaseMigrationService', () => {
           customHeaders: '{"x-site-scope":"internal"}',
           status: 'active',
         }],
-        siteAnnouncements: [],
         siteDisabledModels: [],
         accounts: [],
         accountTokens: [],
@@ -271,7 +269,6 @@ describe('databaseMigrationService', () => {
           createdAt: '2026-03-30T00:00:00.000Z',
           updatedAt: '2026-03-31T12:05:00.000Z',
         }],
-        siteAnnouncements: [],
         siteDisabledModels: [],
         accounts: [],
         accountTokens: [],
@@ -334,7 +331,6 @@ describe('databaseMigrationService', () => {
           customHeaders: { 'x-site-scope': 'internal' },
           status: 'active',
         }],
-        siteAnnouncements: [],
         siteDisabledModels: [],
         accounts: [{
           id: 2,
@@ -435,7 +431,6 @@ describe('databaseMigrationService', () => {
           customHeaders: { 'x-site-scope': 'internal' },
           status: 'active',
         }],
-        siteAnnouncements: [],
         siteDisabledModels: [],
         accounts: [{
           id: 2,
@@ -523,7 +518,6 @@ describe('databaseMigrationService', () => {
           customHeaders: { 'x-site-scope': 'internal' },
           status: 'active',
         }],
-        siteAnnouncements: [],
         siteDisabledModels: [],
         accounts: [{
           id: 2,
@@ -612,7 +606,6 @@ describe('databaseMigrationService', () => {
           customHeaders: { 'x-site-scope': 'internal' },
           status: 'active',
         }],
-        siteAnnouncements: [],
         siteDisabledModels: [],
         accounts: [{
           id: 2,
@@ -696,7 +689,6 @@ describe('databaseMigrationService', () => {
           customHeaders: { 'x-site-scope': 'internal' },
           status: 'active',
         }],
-        siteAnnouncements: [],
         siteDisabledModels: [],
         accounts: [{
           id: 2,
@@ -777,7 +769,6 @@ describe('databaseMigrationService', () => {
       timestamp: Date.now(),
       accounts: {
         sites: [],
-        siteAnnouncements: [],
         siteDisabledModels: [{
           id: 3,
           siteId: 12,
@@ -860,137 +851,6 @@ describe('databaseMigrationService', () => {
     expect(tokenRouteStatement?.values[routeModeIndex]).toBe('explicit_group');
   });
 
-  it('includes site announcements in migration statements', () => {
-    const statements = __databaseMigrationServiceTestUtils.buildStatements({
-      version: 'test',
-      timestamp: Date.now(),
-      accounts: {
-        sites: [],
-        siteDisabledModels: [],
-        accounts: [],
-        accountTokens: [],
-        checkinLogs: [],
-        modelAvailability: [],
-        tokenModelAvailability: [],
-        tokenRoutes: [],
-        routeChannels: [],
-        routeGroupSources: [],
-        proxyLogs: [],
-        proxyVideoTasks: [],
-        proxyFiles: [],
-        downstreamApiKeys: [],
-        events: [],
-        siteAnnouncements: [{
-          id: 11,
-          siteId: 3,
-          platform: 'openai',
-          sourceKey: 'notice-1',
-          title: '????',
-          content: '????',
-          level: 'warning',
-          sourceUrl: 'https://example.com/notice',
-          startsAt: '2026-03-20T00:00:00.000Z',
-          endsAt: '2026-03-21T00:00:00.000Z',
-          upstreamCreatedAt: '2026-03-19T00:00:00.000Z',
-          upstreamUpdatedAt: '2026-03-20T00:00:00.000Z',
-          firstSeenAt: '2026-03-20T00:00:00.000Z',
-          lastSeenAt: '2026-03-20T01:00:00.000Z',
-          readAt: null,
-          dismissedAt: null,
-          rawPayload: '{"id":"notice-1"}',
-        }],
-      },
-      preferences: {
-        settings: [],
-      },
-    } as any);
-
-    const statement = statements.find((item) => item.table === 'site_announcements');
-    expect(statement).toBeDefined();
-    expect(statement?.columns).toContain('source_key');
-    expect(statement?.values[statement?.columns.indexOf('title') ?? -1]).toBe('????');
-  });
-
-  it('includes site announcements in migration summary', async () => {
-    vi.resetModules();
-
-    const rowsByTable = {
-      settings: [],
-      sites: [],
-      siteAnnouncements: [{
-        id: 11,
-        siteId: 3,
-        platform: 'openai',
-        sourceKey: 'notice-1',
-        title: '????',
-        content: '????',
-        level: 'warning',
-        sourceUrl: 'https://example.com/notice',
-        startsAt: '2026-03-20T00:00:00.000Z',
-        endsAt: '2026-03-21T00:00:00.000Z',
-        upstreamCreatedAt: '2026-03-19T00:00:00.000Z',
-        upstreamUpdatedAt: '2026-03-20T00:00:00.000Z',
-        firstSeenAt: '2026-03-20T00:00:00.000Z',
-        lastSeenAt: '2026-03-20T01:00:00.000Z',
-        readAt: null,
-        dismissedAt: null,
-        rawPayload: '{"id":"notice-1"}',
-      }],
-      siteDisabledModels: [],
-      accounts: [],
-      accountTokens: [],
-      checkinLogs: [],
-      modelAvailability: [],
-      tokenModelAvailability: [],
-      tokenRoutes: [],
-      routeChannels: [],
-      routeGroupSources: [],
-      proxyLogs: [],
-      proxyVideoTasks: [],
-      proxyFiles: [],
-      downstreamApiKeys: [],
-      events: [],
-    };
-
-    const client = {
-      dialect: 'sqlite',
-      connectionString: ':memory:',
-      ssl: false,
-      begin: vi.fn(async () => {}),
-      commit: vi.fn(async () => {}),
-      rollback: vi.fn(async () => {}),
-      execute: vi.fn(async () => []),
-      queryScalar: vi.fn(async () => 0),
-      close: vi.fn(async () => {}),
-    };
-
-    vi.doMock('../db/index.js', () => ({
-      db: createDbMock(rowsByTable),
-      schema: createDbSchemaMock(),
-    }));
-    vi.doMock('../db/runtimeSchemaBootstrap.js', () => ({
-      createRuntimeSchemaClient: async () => client,
-      ensureRuntimeDatabaseSchema: async () => {},
-    }));
-
-    try {
-      const { migrateCurrentDatabase } = await import('./databaseMigrationService.js');
-      const summary = await migrateCurrentDatabase({
-        dialect: 'sqlite',
-        connectionString: ':memory:',
-        overwrite: true,
-      });
-
-      expect(summary.rows.siteAnnouncements).toBe(1);
-      expect(client.begin).toHaveBeenCalledTimes(1);
-      expect(client.commit).toHaveBeenCalledTimes(1);
-      expect(client.close).toHaveBeenCalledTimes(1);
-    } finally {
-      vi.doUnmock('../db/index.js');
-      vi.doUnmock('../db/runtimeSchemaBootstrap.js');
-      vi.resetModules();
-    }
-  });
 
   it('excludes runtime database config settings from migration statements', () => {
     const statements = __databaseMigrationServiceTestUtils.buildStatements({
@@ -998,7 +858,6 @@ describe('databaseMigrationService', () => {
       timestamp: Date.now(),
       accounts: {
         sites: [],
-        siteAnnouncements: [],
         siteDisabledModels: [],
         accounts: [],
         accountTokens: [],

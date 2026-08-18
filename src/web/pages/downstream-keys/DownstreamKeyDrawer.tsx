@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { api, type DownstreamApiKeyTrendResponse } from '../../api.js';
 import { useToast } from '../../components/Toast.js';
 import { useAnimatedVisibility } from '../../components/useAnimatedVisibility.js';
-import { readClientTimeZone } from '../helpers/siteAnnouncementPresentation.js';
+import { readClientTimeZone } from '../helpers/checkinLogTime.js';
 import {
   formatCompactTokens,
   formatIso,
