@@ -136,7 +136,7 @@ describe('siteInitializationPresets', () => {
       initialSegment: 'apikey',
       recommendedSkipModelFetch: true,
     });
-    expect(agentPlanResponsesPreset?.recommendedModels).toEqual(expect.arrayContaining(['ark-code-latest', 'doubao-seed-2.1-turbo']));
+    expect(agentPlanResponsesPreset?.recommendedModels).toEqual(expect.arrayContaining(['ark-code-latest', 'doubao-seed-2-1-turbo']));
 
     const agentPlanClaudePreset = getSiteInitializationPreset('agent-plan-claude');
     expect(agentPlanClaudePreset).toMatchObject({

@@ -86,9 +86,25 @@ const DOUBAO_CODING_RECOMMENDED_MODELS = Object.freeze([
 
 const VOLCENGINE_AGENT_PLAN_RECOMMENDED_MODELS = Object.freeze([
   'ark-code-latest',
-  'doubao-seed-2.1-turbo',
-  'glm-5.2',
+  'doubao-seed-evolving',
+  'doubao-seed-2-1-turbo',
+  'doubao-seed-2.0-lite',
+  'doubao-seed-2.0-mini',
   'kimi-k3',
+  'glm-5.2',
+  'glm-5.3',
+  'minimax-m3',
+  'kimi-k2.7-code',
+  'deepseek-v4-flash',
+  'deepseek-v4-pro',
+  'doubao-embedding-vision',
+  'doubao-seedance-2.0',
+  'doubao-seedance-2.0-fast',
+  'doubao-seedream-5.0-lite',
+  'deepseek-latest',
+  'minimax-latest',
+  'kimi-latest',
+  'glm-latest',
 ]);
 
 const SITE_INITIALIZATION_PRESETS = Object.freeze([
