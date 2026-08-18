@@ -19,7 +19,14 @@ import {
   type ProxyLogsSummary,
   type ProxyLogStatusFilter,
   type ProxyLogUsageSource,
+  type ProxyLogsAnalytics,
 } from "../api.js";
+import UsageStatsCards from "../components/proxy-logs/UsageStatsCards.js";
+import DistributionCard from "../components/proxy-logs/DistributionCard.js";
+import TokenTrendChart from "../components/proxy-logs/TokenTrendChart.js";
+import ColumnSettingsDropdown from "../components/proxy-logs/ColumnSettingsDropdown.js";
+import { exportProxyLogsCsv } from "../components/proxy-logs/exportProxyLogsCsv.js";
+import { formatCompactTokens, formatCostFixed, formatSecondsFromMs } from "../components/proxy-logs/formatUsage.js";
 import { useToast } from "../components/Toast.js";
 import { ModelBadge } from "../components/BrandIcon.js";
 import CenteredModal from "../components/CenteredModal.js";
@@ -442,6 +449,16 @@ function normalizeRouteSiteId(raw: string | null): number | null {
   return parsed;
 }
 
+function normalizeRouteText(raw: string | null): string {
+  return (raw || "").trim();
+}
+
+function normalizeRouteStream(raw: string | null): string {
+  const text = (raw || "").trim().toLowerCase();
+  if (text === "stream" || text === "sync") return text;
+  return "";
+}
+
 function normalizeRouteDateTimeInput(raw: string | null): string {
   const text = (raw || "").trim();
   if (!text) return "";
@@ -461,6 +478,10 @@ function readProxyLogsRouteState(search: string) {
     siteId: normalizeRouteSiteId(params.get("siteId")),
     from: normalizeRouteDateTimeInput(params.get("from")),
     to: normalizeRouteDateTimeInput(params.get("to")),
+    model: normalizeRouteText(params.get("model")),
+    group: normalizeRouteText(params.get("group")),
+    stream: normalizeRouteStream(params.get("stream")),
+    keyId: normalizeRouteSiteId(params.get("keyId")),
   };
 }
 
@@ -473,6 +494,10 @@ function buildProxyLogsRouteSearch(input: {
   siteId: number | null;
   from: string;
   to: string;
+  model: string;
+  group: string;
+  stream: string;
+  keyId: number | null;
 }) {
   const params = new URLSearchParams();
   if (input.page > 1) params.set("page", String(input.page));
@@ -484,6 +509,10 @@ function buildProxyLogsRouteSearch(input: {
   if (input.siteId) params.set("siteId", String(input.siteId));
   if (input.from.trim()) params.set("from", input.from.trim());
   if (input.to.trim()) params.set("to", input.to.trim());
+  if (input.model.trim()) params.set("model", input.model.trim());
+  if (input.group.trim()) params.set("group", input.group.trim());
+  if (input.stream.trim()) params.set("stream", input.stream.trim());
+  if (input.keyId) params.set("keyId", String(input.keyId));
   const next = params.toString();
   return next ? `?${next}` : "";
 }
@@ -753,6 +782,53 @@ function persistDebugTracePanelExpanded(expanded: boolean) {
   }
 }
 
+const PROXY_LOGS_HIDDEN_COLUMNS_STORAGE_KEY = "metapi.proxyLogs.hiddenColumns";
+
+const PROXY_LOG_TABLE_COLUMNS: Array<{ key: string; label: string }> = [
+  { key: "time", label: "时间" },
+  { key: "model", label: "模型" },
+  { key: "group", label: "分组" },
+  { key: "site", label: "站点" },
+  { key: "client", label: "客户端" },
+  { key: "status", label: "状态" },
+  { key: "latency", label: "用时" },
+  { key: "tokens", label: "Token" },
+  { key: "cost", label: "花费" },
+  { key: "retry", label: "重试" },
+];
+
+const ALWAYS_VISIBLE_COLUMNS = new Set(["time", "model", "status"]);
+
+function readStoredHiddenColumns(): Set<string> {
+  try {
+    const stored = globalThis.localStorage?.getItem(
+      PROXY_LOGS_HIDDEN_COLUMNS_STORAGE_KEY,
+    );
+    if (!stored) return new Set();
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(
+      parsed.filter(
+        (key): key is string =>
+          typeof key === "string" && !ALWAYS_VISIBLE_COLUMNS.has(key),
+      ),
+    );
+  } catch {
+    return new Set();
+  }
+}
+
+function persistHiddenColumns(hidden: Set<string>) {
+  try {
+    globalThis.localStorage?.setItem(
+      PROXY_LOGS_HIDDEN_COLUMNS_STORAGE_KEY,
+      JSON.stringify(Array.from(hidden)),
+    );
+  } catch {
+    // Ignore storage write failures.
+  }
+}
+
 export default function ProxyLogs() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -775,6 +851,15 @@ export default function ProxyLogs() {
   );
   const [fromInput, setFromInput] = useState(initialRouteState.from);
   const [toInput, setToInput] = useState(initialRouteState.to);
+  const [modelFilter, setModelFilter] = useState(initialRouteState.model);
+  const [groupFilter, setGroupFilter] = useState(initialRouteState.group);
+  const [streamFilter, setStreamFilter] = useState(initialRouteState.stream);
+  const [keyFilter, setKeyFilter] = useState<number | null>(initialRouteState.keyId);
+  const [granularity, setGranularity] = useState<"hour" | "day">("hour");
+  const [analytics, setAnalytics] = useState<ProxyLogsAnalytics | null>(null);
+  const [analyticsLoading, setAnalyticsLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
+  const [hiddenColumns, setHiddenColumns] = useState<Set<string>>(() => readStoredHiddenColumns());
   const [expanded, setExpanded] = useState<number | null>(null);
   const [page, setPage] = useState(initialRouteState.page);
   const [pageSize, setPageSize] = useState(initialRouteState.pageSize);
@@ -844,6 +929,10 @@ export default function ProxyLogs() {
     );
     setFromInput((current) => (current === next.from ? current : next.from));
     setToInput((current) => (current === next.to ? current : next.to));
+    setModelFilter((current) => (current === next.model ? current : next.model));
+    setGroupFilter((current) => (current === next.group ? current : next.group));
+    setStreamFilter((current) => (current === next.stream ? current : next.stream));
+    setKeyFilter((current) => (current === next.keyId ? current : next.keyId));
     setPage((current) => (current === next.page ? current : next.page));
     setPageSize((current) =>
       current === next.pageSize ? current : next.pageSize,
@@ -860,6 +949,10 @@ export default function ProxyLogs() {
       siteId: siteFilter,
       from: fromInput,
       to: toInput,
+      model: modelFilter,
+      group: groupFilter,
+      stream: streamFilter,
+      keyId: keyFilter,
     });
     if (nextSearch === location.search) return;
     navigate(
@@ -869,14 +962,18 @@ export default function ProxyLogs() {
   }, [
     clientFilter,
     fromInput,
+    groupFilter,
+    keyFilter,
     location.pathname,
     location.search,
+    modelFilter,
     navigate,
     page,
     pageSize,
     searchInput,
     siteFilter,
     statusFilter,
+    streamFilter,
     toInput,
   ]);
 
@@ -972,6 +1069,112 @@ export default function ProxyLogs() {
     return index;
   }, [sites]);
 
+  const baseFilterParams = useMemo(
+    () => ({
+      status: statusFilter,
+      search: deferredSearchInput,
+      ...(clientFilter ? { client: clientFilter } : {}),
+      ...(siteFilter ? { siteId: siteFilter } : {}),
+      ...(fromApiBoundary ? { from: fromApiBoundary } : {}),
+      ...(toApiBoundaryValue ? { to: toApiBoundaryValue } : {}),
+      ...(modelFilter.trim() ? { model: modelFilter.trim() } : {}),
+      ...(groupFilter.trim() ? { group: groupFilter.trim() } : {}),
+      ...(streamFilter ? { stream: streamFilter } : {}),
+      ...(keyFilter ? { downstreamKeyId: keyFilter } : {}),
+    }),
+    [
+      clientFilter,
+      deferredSearchInput,
+      fromApiBoundary,
+      groupFilter,
+      keyFilter,
+      modelFilter,
+      siteFilter,
+      statusFilter,
+      streamFilter,
+      toApiBoundaryValue,
+    ],
+  );
+
+  const loadAnalytics = useCallback(async () => {
+    if (hasInvalidTimeRange) {
+      setAnalytics(null);
+      setAnalyticsLoading(false);
+      return;
+    }
+    setAnalyticsLoading(true);
+    try {
+      const data = await api.getProxyLogsAnalytics({
+        ...baseFilterParams,
+        granularity,
+      });
+      setAnalytics(data);
+    } catch (error) {
+      console.error("Failed to load usage analytics:", error);
+    } finally {
+      setAnalyticsLoading(false);
+    }
+  }, [baseFilterParams, granularity, hasInvalidTimeRange]);
+
+  useEffect(() => {
+    void loadAnalytics();
+  }, [loadAnalytics]);
+
+  const applyRangePreset = useCallback((key: string) => {
+    const now = new Date();
+    const start = new Date(now);
+    if (key === "7d") start.setDate(start.getDate() - 7);
+    else if (key === "30d") start.setDate(start.getDate() - 30);
+    else start.setHours(start.getHours() - 24);
+    setFromInput(formatDateTimeInputValue(start));
+    setToInput(formatDateTimeInputValue(now));
+    setPage(1);
+    setGranularity(key === "24h" ? "hour" : "day");
+  }, []);
+
+  const activeRangePreset = useMemo(() => {
+    if (!fromInput || !toInput) return null;
+    const fromMs = new Date(fromInput).getTime();
+    const toMs = new Date(toInput).getTime();
+    if (!Number.isFinite(fromMs) || !Number.isFinite(toMs)) return null;
+    const diffHours = (toMs - fromMs) / 3_600_000;
+    if (Math.abs(diffHours - 24) < 1.5) return "24h";
+    if (Math.abs(diffHours - 24 * 7) < 12) return "7d";
+    if (Math.abs(diffHours - 24 * 30) < 24) return "30d";
+    return null;
+  }, [fromInput, toInput]);
+
+  const modelOptions = useMemo(() => {
+    const names = (analytics?.modelStats ?? [])
+      .map((item) => item.label)
+      .filter(Boolean);
+    return [
+      { value: "", label: "全部模型" },
+      ...names.map((name) => ({ value: name, label: name })),
+    ];
+  }, [analytics]);
+
+  const groupOptions = useMemo(() => {
+    const items = (analytics?.groupStats ?? []).filter((item) => item.key !== "(none)");
+    return [
+      { value: "", label: "全部分组" },
+      ...items.map((item) => ({ value: item.label, label: item.label })),
+    ];
+  }, [analytics]);
+
+  const isColumnVisible = useCallback(
+    (key: string) => !hiddenColumns.has(key),
+    [hiddenColumns],
+  );
+
+  const tableColumnCount = useMemo(
+    () =>
+      1 +
+      PROXY_LOG_TABLE_COLUMNS.filter((column) => !hiddenColumns.has(column.key))
+        .length,
+    [hiddenColumns],
+  );
+
   const load = useCallback(
     async (silent = false) => {
       const seq = ++loadSeq.current;
@@ -987,12 +1190,7 @@ export default function ProxyLogs() {
         const params = {
           limit: pageSize,
           offset: currentOffset,
-          status: statusFilter,
-          search: deferredSearchInput,
-          ...(clientFilter ? { client: clientFilter } : {}),
-          ...(siteFilter ? { siteId: siteFilter } : {}),
-          ...(fromApiBoundary ? { from: fromApiBoundary } : {}),
-          ...(toApiBoundaryValue ? { to: toApiBoundaryValue } : {}),
+          ...baseFilterParams,
         };
         const data = await api.getProxyLogsQuery(params);
         if (seq !== loadSeq.current) return;
@@ -1006,15 +1204,10 @@ export default function ProxyLogs() {
       }
     },
     [
-      clientFilter,
+      baseFilterParams,
       currentOffset,
-      deferredSearchInput,
-      fromApiBoundary,
       hasInvalidTimeRange,
       pageSize,
-      siteFilter,
-      statusFilter,
-      toApiBoundaryValue,
       toast,
     ],
   );
@@ -1030,12 +1223,7 @@ export default function ProxyLogs() {
 
       try {
         const data = await api.getProxyLogsMeta({
-          status: statusFilter,
-          search: deferredSearchInput,
-          ...(clientFilter ? { client: clientFilter } : {}),
-          ...(siteFilter ? { siteId: siteFilter } : {}),
-          ...(fromApiBoundary ? { from: fromApiBoundary } : {}),
-          ...(toApiBoundaryValue ? { to: toApiBoundaryValue } : {}),
+          ...baseFilterParams,
           ...(forceRefresh ? { refresh: 1 } : {}),
         });
         if (seq !== metaLoadSeq.current) return;
@@ -1063,13 +1251,8 @@ export default function ProxyLogs() {
       }
     },
     [
-      clientFilter,
-      deferredSearchInput,
-      fromApiBoundary,
+      baseFilterParams,
       hasInvalidTimeRange,
-      siteFilter,
-      statusFilter,
-      toApiBoundaryValue,
     ],
   );
 
@@ -1703,6 +1886,46 @@ export default function ProxyLogs() {
           placeholder="全部站点"
         />
       </div>
+      <div className="proxy-logs-filter-select">
+        <ModernSelect
+          size="sm"
+          value={modelFilter}
+          onChange={(nextValue) => {
+            setModelFilter(nextValue);
+            setPage(1);
+          }}
+          options={modelOptions}
+          placeholder="全部模型"
+        />
+      </div>
+      <div className="proxy-logs-filter-select">
+        <ModernSelect
+          size="sm"
+          value={groupFilter}
+          onChange={(nextValue) => {
+            setGroupFilter(nextValue);
+            setPage(1);
+          }}
+          options={groupOptions}
+          placeholder="全部分组"
+        />
+      </div>
+      <div className="proxy-logs-filter-select">
+        <ModernSelect
+          size="sm"
+          value={streamFilter}
+          onChange={(nextValue) => {
+            setStreamFilter(nextValue);
+            setPage(1);
+          }}
+          options={[
+            { value: "", label: "全部类型" },
+            { value: "stream", label: "流式" },
+            { value: "sync", label: "非流式" },
+          ]}
+          placeholder="全部类型"
+        />
+      </div>
       <label className="proxy-logs-time-field">
         <span>开始</span>
         <input
@@ -1758,6 +1981,10 @@ export default function ProxyLogs() {
           setStatusFilter("all");
           setClientFilter("");
           setSiteFilter(null);
+          setModelFilter("");
+          setGroupFilter("");
+          setStreamFilter("");
+          setKeyFilter(null);
           setFromInput("");
           setToInput("");
           setSearchInput("");
@@ -1765,6 +1992,36 @@ export default function ProxyLogs() {
         }}
       >
         清空筛选
+      </button>
+      <ColumnSettingsDropdown
+        columns={PROXY_LOG_TABLE_COLUMNS.filter(
+          (column) => !ALWAYS_VISIBLE_COLUMNS.has(column.key),
+        )}
+        hiddenColumns={hiddenColumns}
+        onToggle={(key) => {
+          setHiddenColumns((current) => {
+            const next = new Set(current);
+            if (next.has(key)) next.delete(key);
+            else next.add(key);
+            persistHiddenColumns(next);
+            return next;
+          });
+        }}
+      />
+      <button
+        type="button"
+        className="btn btn-ghost"
+        style={{ border: "1px solid var(--color-border)", padding: "6px 12px", fontSize: 12 }}
+        disabled={exporting}
+        onClick={() => {
+          setExporting(true);
+          exportProxyLogsCsv(baseFilterParams)
+            .then((count) => toast.success(`已导出 ${count} 条记录`))
+            .catch((error) => toast.error(error?.message || "导出失败"))
+            .finally(() => setExporting(false));
+        }}
+      >
+        {exporting ? "导出中..." : "导出 CSV"}
       </button>
     </>
   );
@@ -2099,6 +2356,65 @@ export default function ProxyLogs() {
             {loading ? "加载中..." : "刷新"}
           </button>
         </div>
+      </div>
+
+      <UsageStatsCards stats={analytics?.stats ?? null} loading={analyticsLoading} />
+
+      <div className="usage-range-bar">
+        <div className="usage-range-presets">
+          <span className="usage-range-label">时间范围:</span>
+          {[
+            { key: "24h", label: "近24小时" },
+            { key: "7d", label: "近7天" },
+            { key: "30d", label: "近30天" },
+          ].map((preset) => (
+            <button
+              key={preset.key}
+              type="button"
+              className={`usage-preset-btn${activeRangePreset === preset.key ? " active" : ""}`}
+              onClick={() => applyRangePreset(preset.key)}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+        <div className="usage-range-granularity">
+          <span className="usage-range-label">粒度:</span>
+          <div className="usage-metric-toggle">
+            {(["hour", "day"] as const).map((key) => (
+              <button
+                key={key}
+                type="button"
+                className={`usage-metric-toggle-btn${granularity === key ? " active" : ""}`}
+                onClick={() => setGranularity(key)}
+              >
+                {key === "hour" ? "按小时" : "按天"}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div className="usage-chart-grid">
+        <DistributionCard
+          title="模型分布"
+          dimensionLabel="模型"
+          items={analytics?.modelStats ?? []}
+          loading={analyticsLoading}
+        />
+        <DistributionCard
+          title="分组使用分布"
+          dimensionLabel="分组"
+          items={analytics?.groupStats ?? []}
+          loading={analyticsLoading}
+        />
+        <DistributionCard
+          title="站点分布"
+          dimensionLabel="站点"
+          items={analytics?.siteStats ?? []}
+          loading={analyticsLoading}
+        />
+        <TokenTrendChart trend={analytics?.trend ?? []} loading={analyticsLoading} />
       </div>
 
       <ResponsiveFilterPanel
@@ -2818,16 +3134,24 @@ export default function ProxyLogs() {
             <thead>
               <tr>
                 <th style={{ width: 28 }} />
-                <th>时间</th>
-                <th>模型</th>
-                <th>站点</th>
-                <th>客户端</th>
-                <th>{tr("状态")}</th>
-                <th style={{ textAlign: "center" }}>用时</th>
-                <th style={{ textAlign: "right" }}>输入</th>
-                <th style={{ textAlign: "right" }}>输出</th>
-                <th style={{ textAlign: "right" }}>花费</th>
-                <th style={{ textAlign: "center" }}>重试</th>
+                {isColumnVisible("time") && <th>时间</th>}
+                {isColumnVisible("model") && <th>模型</th>}
+                {isColumnVisible("group") && <th>分组</th>}
+                {isColumnVisible("site") && <th>站点</th>}
+                {isColumnVisible("client") && <th>客户端</th>}
+                {isColumnVisible("status") && <th>{tr("状态")}</th>}
+                {isColumnVisible("latency") && (
+                  <th style={{ textAlign: "center" }}>用时</th>
+                )}
+                {isColumnVisible("tokens") && (
+                  <th style={{ textAlign: "right" }}>Token</th>
+                )}
+                {isColumnVisible("cost") && (
+                  <th style={{ textAlign: "right" }}>花费</th>
+                )}
+                {isColumnVisible("retry") && (
+                  <th style={{ textAlign: "center" }}>重试</th>
+                )}
               </tr>
             </thead>
             <tbody>
@@ -2891,16 +3215,19 @@ export default function ProxyLogs() {
                           />
                         </svg>
                       </td>
-                      <td
-                        style={{
-                          fontSize: 12,
-                          whiteSpace: "nowrap",
-                          fontVariantNumeric: "tabular-nums",
-                          color: "var(--color-text-secondary)",
-                        }}
-                      >
-                        {formatDateTimeLocal(log.createdAt)}
-                      </td>
+                      {isColumnVisible("time") && (
+                        <td
+                          style={{
+                            fontSize: 12,
+                            whiteSpace: "nowrap",
+                            fontVariantNumeric: "tabular-nums",
+                            color: "var(--color-text-secondary)",
+                          }}
+                        >
+                          {formatDateTimeLocal(log.createdAt)}
+                        </td>
+                      )}
+                      {isColumnVisible("model") && (
                       <td>
                         <div
                           style={{
@@ -2961,6 +3288,19 @@ export default function ProxyLogs() {
                           ) : null}
                         </div>
                       </td>
+                      )}
+                      {isColumnVisible("group") && (
+                        <td style={{ fontSize: 12, color: "var(--color-text-secondary)" }}>
+                          {detailLog.downstreamKeyGroupName ? (
+                            <span className="badge badge-muted" style={{ fontSize: 10 }}>
+                              {detailLog.downstreamKeyGroupName}
+                            </span>
+                          ) : (
+                            <span style={{ color: "var(--color-text-muted)" }}>-</span>
+                          )}
+                        </td>
+                      )}
+                      {isColumnVisible("site") && (
                       <td
                         style={{
                           fontSize: 12,
@@ -2975,6 +3315,8 @@ export default function ProxyLogs() {
                           badgeStyle={{ fontSize: 11 }}
                         />
                       </td>
+                      )}
+                      {isColumnVisible("client") && (
                       <td
                         style={{
                           fontSize: 12,
@@ -2983,6 +3325,8 @@ export default function ProxyLogs() {
                       >
                         {renderProxyLogClientCell(detailLog)}
                       </td>
+                      )}
+                      {isColumnVisible("status") && (
                       <td>
                         <span
                           className={`badge ${log.status === "success" ? "badge-success" : "badge-error"}`}
@@ -3002,53 +3346,55 @@ export default function ProxyLogs() {
                           {log.status === "success" ? "成功" : "失败"}
                         </span>
                       </td>
-                      <td style={{ textAlign: "center" }}>
-                        <span
-                          style={{
-                            fontVariantNumeric: "tabular-nums",
-                            fontSize: 12,
-                            fontWeight: 600,
-                            color: latencyColor(log.latencyMs),
-                            background: latencyBgColor(log.latencyMs),
-                            padding: "2px 8px",
-                            borderRadius: 4,
-                          }}
-                        >
-                          {formatLatency(log.latencyMs)}
-                        </span>
-                      </td>
-                      <td
-                        style={{
-                          textAlign: "right",
-                          fontSize: 12,
-                          fontVariantNumeric: "tabular-nums",
-                          color: "var(--color-text-secondary)",
-                        }}
-                      >
-                        {formatProxyLogTokenValue(log.promptTokens)}
-                      </td>
-                      <td
-                        style={{
-                          textAlign: "right",
-                          fontSize: 12,
-                          fontVariantNumeric: "tabular-nums",
-                          color: "var(--color-text-secondary)",
-                        }}
-                      >
-                        {formatProxyLogTokenValue(log.completionTokens)}
-                      </td>
-                      <td
-                        style={{
-                          textAlign: "right",
-                          fontSize: 12,
-                          fontVariantNumeric: "tabular-nums",
-                          fontWeight: 500,
-                        }}
-                      >
-                        {typeof log.estimatedCost === "number"
-                          ? `$${log.estimatedCost.toFixed(6)}`
-                          : "-"}
-                      </td>
+                      )}
+                      {isColumnVisible("latency") && (
+                        <td style={{ textAlign: "center" }}>
+                          <div
+                            className="usage-latency-cell"
+                            style={{ borderLeftColor: latencyColor(log.latencyMs) }}
+                          >
+                            <span style={{ color: "var(--color-text-muted)" }}>
+                              首字 {formatSecondsFromMs(detailLog.firstByteLatencyMs)}
+                            </span>
+                            <span
+                              style={{
+                                fontWeight: 600,
+                                color: latencyColor(log.latencyMs),
+                              }}
+                            >
+                              总 {formatSecondsFromMs(log.latencyMs)}
+                            </span>
+                          </div>
+                        </td>
+                      )}
+                      {isColumnVisible("tokens") && (
+                        <td style={{ textAlign: "right" }}>
+                          <div className="usage-token-cell">
+                            <span>
+                              <span style={{ color: "var(--color-text-muted)" }}>↓</span>{" "}
+                              {formatProxyLogTokenValue(log.promptTokens)}
+                              {" "}
+                              <span style={{ color: "var(--color-text-muted)" }}>↑</span>{" "}
+                              {formatProxyLogTokenValue(log.completionTokens)}
+                            </span>
+                            {(detailLog.billingDetails?.usage?.cacheReadTokens ?? 0) > 0 && (
+                              <span className="usage-token-cache">
+                                缓存 {formatCompactTokens(detailLog.billingDetails?.usage?.cacheReadTokens ?? 0)}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                      {isColumnVisible("cost") && (
+                        <td style={{ textAlign: "right" }}>
+                          <span className="usage-cost-value">
+                            {typeof log.estimatedCost === "number"
+                              ? formatCostFixed(log.estimatedCost)
+                              : "-"}
+                          </span>
+                        </td>
+                      )}
+                      {isColumnVisible("retry") && (
                       <td style={{ textAlign: "center" }}>
                         {log.retryCount > 0 ? (
                           <span
@@ -3068,10 +3414,11 @@ export default function ProxyLogs() {
                           </span>
                         )}
                       </td>
+                      )}
                     </tr>
                     {expanded === log.id && (
                       <tr style={{ background: "var(--color-bg)" }}>
-                        <td colSpan={11} style={{ padding: 0 }}>
+                        <td colSpan={tableColumnCount} style={{ padding: 0 }}>
                           <div className="anim-collapse is-open">
                             <div className="anim-collapse-inner">
                               <div

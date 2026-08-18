@@ -814,4 +814,166 @@ describe("stats proxy logs routes", () => {
       ]),
     );
   });
+
+  it("serves usage analytics with distributions, trend buckets, and new list filters", async () => {
+    const site = await db
+      .insert(schema.sites)
+      .values({
+        name: "analytics-site",
+        url: "https://analytics-site.example.com",
+        platform: "new-api",
+      })
+      .returning()
+      .get();
+
+    const account = await db
+      .insert(schema.accounts)
+      .values({
+        siteId: site.id,
+        username: "analytics-user",
+        accessToken: "analytics-token",
+        status: "active",
+      })
+      .returning()
+      .get();
+
+    const groupedKey = await db
+      .insert(schema.downstreamApiKeys)
+      .values({
+        name: "stable-key",
+        key: "sk-stable-001",
+        groupName: "稳定版本",
+        enabled: true,
+      })
+      .returning()
+      .get();
+
+    const base = Date.UTC(2026, 2, 9, 8, 0, 0);
+    await db
+      .insert(schema.proxyLogs)
+      .values([
+        {
+          accountId: account.id,
+          downstreamApiKeyId: groupedKey.id,
+          modelRequested: "gpt-5.6-sol",
+          modelActual: "gpt-5.6-sol",
+          status: "success",
+          isStream: 1,
+          latencyMs: 100,
+          promptTokens: 100,
+          completionTokens: 50,
+          totalTokens: 150,
+          estimatedCost: 0.5,
+          createdAt: formatUtcSqlDateTime(new Date(base)),
+          billingDetails: JSON.stringify({
+            usage: { cacheReadTokens: 40, cacheCreationTokens: 5 },
+          }),
+        },
+        {
+          accountId: account.id,
+          modelRequested: "gpt-5.6-luna",
+          modelActual: "gpt-5.6-luna",
+          status: "failed",
+          isStream: 0,
+          latencyMs: 300,
+          promptTokens: 10,
+          completionTokens: 0,
+          totalTokens: 10,
+          estimatedCost: 0.1,
+          createdAt: formatUtcSqlDateTime(new Date(base + 90 * 60 * 1000)),
+        },
+      ])
+      .run();
+
+    const from = new Date(base - 60 * 60 * 1000).toISOString();
+    const to = new Date(base + 5 * 60 * 60 * 1000).toISOString();
+
+    const analyticsResponse = await app.inject({
+      method: "GET",
+      url: `/api/stats/proxy-logs/analytics?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&granularity=hour`,
+    });
+
+    expect(analyticsResponse.statusCode).toBe(200);
+    const analytics = analyticsResponse.json() as {
+      stats: {
+        totalRequests: number;
+        successCount: number;
+        failedCount: number;
+        promptTokens: number;
+        completionTokens: number;
+        totalTokens: number;
+        cacheReadTokens: number;
+        cacheCreationTokens: number;
+        totalCost: number;
+        averageLatencyMs: number | null;
+      };
+      trend: Array<{
+        bucketStart: string;
+        label: string;
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadTokens: number;
+        cacheHitRate: number | null;
+      }>;
+      modelStats: Array<{ key: string; label: string; requests: number; tokens: number; actualCost: number }>;
+      groupStats: Array<{ key: string; label: string; requests: number; tokens: number }>;
+      siteStats: Array<{ key: string; label: string; requests: number; tokens: number }>;
+    };
+
+    expect(analytics.stats).toMatchObject({
+      totalRequests: 2,
+      successCount: 1,
+      failedCount: 1,
+      promptTokens: 110,
+      completionTokens: 50,
+      totalTokens: 160,
+      cacheReadTokens: 40,
+      cacheCreationTokens: 5,
+    });
+    expect(analytics.stats.totalCost).toBeCloseTo(0.6, 6);
+    expect(analytics.stats.averageLatencyMs).toBe(200);
+    expect(analytics.trend.length).toBeGreaterThanOrEqual(5);
+    const hitBucket = analytics.trend.find((point) => point.inputTokens === 100);
+    expect(hitBucket).toBeDefined();
+    expect(hitBucket!.cacheReadTokens).toBe(40);
+    expect(hitBucket!.cacheHitRate).toBeCloseTo(28.6, 1);
+
+    expect(analytics.modelStats.map((item) => item.label)).toEqual([
+      "gpt-5.6-sol",
+      "gpt-5.6-luna",
+    ]);
+    expect(analytics.groupStats.map((item) => item.label)).toEqual([
+      "稳定版本",
+      "未分组",
+    ]);
+    expect(analytics.siteStats).toEqual([
+      expect.objectContaining({ label: "analytics-site", requests: 2 }),
+    ]);
+
+    const filteredResponse = await app.inject({
+      method: "GET",
+      url: `/api/stats/proxy-logs?view=query&limit=10&offset=0&model=gpt-5.6-sol&group=${encodeURIComponent("稳定版本")}&stream=stream&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    });
+
+    expect(filteredResponse.statusCode).toBe(200);
+    const filtered = filteredResponse.json() as {
+      items: Array<{ modelActual: string }>;
+      total: number;
+    };
+    expect(filtered.total).toBe(1);
+    expect(filtered.items[0]?.modelActual).toBe("gpt-5.6-sol");
+
+    const ungroupedResponse = await app.inject({
+      method: "GET",
+      url: `/api/stats/proxy-logs?view=query&limit=10&offset=0&group=${encodeURIComponent("(none)")}&from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
+    });
+
+    expect(ungroupedResponse.statusCode).toBe(200);
+    const ungrouped = ungroupedResponse.json() as {
+      items: Array<{ modelActual: string }>;
+      total: number;
+    };
+    expect(ungrouped.total).toBe(1);
+    expect(ungrouped.items[0]?.modelActual).toBe("gpt-5.6-luna");
+  });
 });

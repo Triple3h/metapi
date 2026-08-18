@@ -10,6 +10,7 @@ const { apiMock } = vi.hoisted(() => ({
     getProxyLogs: vi.fn(),
     getProxyLogsQuery: vi.fn(),
     getProxyLogsMeta: vi.fn(),
+    getProxyLogsAnalytics: vi.fn(),
     getProxyLogDetail: vi.fn(),
     getProxyDebugTraces: vi.fn(),
     getProxyDebugTraceDetail: vi.fn(),
@@ -153,6 +154,25 @@ describe('ProxyLogs server-driven page', () => {
         { id: 1, name: 'main-site', status: 'active' },
         { id: 2, name: 'backup-site', status: 'active' },
       ],
+    });
+    apiMock.getProxyLogsAnalytics.mockResolvedValue({
+      range: { fromUtc: '', toUtc: '', granularity: 'hour' },
+      stats: {
+        totalRequests: 12,
+        successCount: 8,
+        failedCount: 4,
+        promptTokens: 10,
+        completionTokens: 5,
+        totalTokens: 15,
+        cacheReadTokens: 0,
+        cacheCreationTokens: 0,
+        totalCost: 1.23,
+        averageLatencyMs: 120,
+      },
+      trend: [],
+      modelStats: [],
+      groupStats: [],
+      siteStats: [],
     });
     apiMock.getProxyLogDetail.mockResolvedValue({
       id: 101,

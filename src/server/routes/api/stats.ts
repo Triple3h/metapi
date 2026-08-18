@@ -32,6 +32,21 @@ import {
   listProxyDebugTraces,
 } from "../../services/proxyDebugTraceStore.js";
 import { parseProxyLogMessageMeta } from "../../services/proxyLogMessage.js";
+import {
+  buildProxyLogWhereClause,
+  normalizeProxyLogClientFilter,
+  normalizeProxyLogDownstreamKeyIdFilter,
+  normalizeProxyLogGroupFilter,
+  normalizeProxyLogModelFilter,
+  normalizeProxyLogSearch,
+  normalizeProxyLogSiteId,
+  normalizeProxyLogStatusFilter,
+  normalizeProxyLogStreamFilter,
+  normalizeProxyLogTimeBoundary,
+  type ProxyLogClientFilter,
+  type ProxyLogStatusFilter,
+} from "../../services/proxyLogQueryFilters.js";
+import { loadProxyLogsAnalytics } from "../../services/proxyLogsAnalyticsService.js";
 import { requiresManagedAccountTokens } from "../../services/accountExtraConfig.js";
 import { ACCOUNT_TOKEN_VALUE_STATUS_READY } from "../../services/accountTokenService.js";
 import {
@@ -136,12 +151,6 @@ function proxyCostSqlExpression() {
   `;
 }
 
-type ProxyLogStatusFilter = "all" | "success" | "failed";
-type ProxyLogClientFilter = {
-  kind: "app" | "family";
-  value: string;
-} | null;
-
 type ProxyLogClientOption = {
   value: string;
   label: string;
@@ -166,48 +175,6 @@ function normalizeProxyLogOffset(raw?: string): number {
   return Math.max(0, parsed);
 }
 
-function normalizeProxyLogStatusFilter(raw?: string): ProxyLogStatusFilter {
-  const normalized = (raw || "").trim().toLowerCase();
-  if (normalized === "success") return "success";
-  if (normalized === "failed") return "failed";
-  return "all";
-}
-
-function normalizeProxyLogSearch(raw?: string): string {
-  return (raw || "").trim().toLowerCase();
-}
-
-function normalizeProxyLogSiteId(raw?: string): number | null {
-  const parsed = Number.parseInt(raw || "", 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  return parsed;
-}
-
-function normalizeProxyLogClientFilter(raw?: string): ProxyLogClientFilter {
-  const text = (raw || "").trim();
-  if (!text) return null;
-  const separatorIndex = text.indexOf(":");
-  if (separatorIndex <= 0) return null;
-  const kind = text.slice(0, separatorIndex).trim().toLowerCase();
-  const value = text
-    .slice(separatorIndex + 1)
-    .trim()
-    .toLowerCase();
-  if (!value) return null;
-  if (kind === "app" || kind === "family") {
-    return { kind, value };
-  }
-  return null;
-}
-
-function normalizeProxyLogTimeBoundary(raw?: string): string | null {
-  const text = (raw || "").trim();
-  if (!text) return null;
-  const parsed = new Date(text);
-  if (Number.isNaN(parsed.getTime())) return null;
-  return formatUtcSqlDateTime(parsed);
-}
-
 function parseDownstreamKeyTags(raw: unknown): string[] {
   if (typeof raw !== "string" || !raw.trim()) return [];
   try {
@@ -227,60 +194,6 @@ function parseDownstreamKeyTags(raw: unknown): string[] {
   } catch {
     return [];
   }
-}
-
-function buildProxyLogSearchCondition(search: string) {
-  if (!search) return null;
-  const likeTerm = `%${search}%`;
-  return sql<boolean>`(
-    lower(coalesce(${schema.proxyLogs.modelRequested}, '')) like ${likeTerm}
-    or lower(coalesce(${schema.proxyLogs.modelActual}, '')) like ${likeTerm}
-    or lower(coalesce(${schema.downstreamApiKeys.name}, '')) like ${likeTerm}
-    or lower(coalesce(${schema.downstreamApiKeys.groupName}, '')) like ${likeTerm}
-    or lower(coalesce(${schema.downstreamApiKeys.tags}, '')) like ${likeTerm}
-  )`;
-}
-
-function buildProxyLogStatusCondition(status: ProxyLogStatusFilter) {
-  if (status === "success") {
-    return eq(schema.proxyLogs.status, "success");
-  }
-  if (status === "failed") {
-    return sql<boolean>`coalesce(${schema.proxyLogs.status}, '') <> 'success'`;
-  }
-  return null;
-}
-
-function buildProxyLogClientCondition(client: ProxyLogClientFilter) {
-  if (!client) return null;
-  if (client.kind === "app") {
-    return eq(schema.proxyLogs.clientAppId, client.value);
-  }
-  return eq(schema.proxyLogs.clientFamily, client.value);
-}
-
-function buildProxyLogWhereClause(params: {
-  status?: ProxyLogStatusFilter;
-  search?: string;
-  client?: ProxyLogClientFilter;
-  siteId?: number | null;
-  fromUtc?: string | null;
-  toUtc?: string | null;
-}) {
-  const conditions = [
-    params.status ? buildProxyLogStatusCondition(params.status) : null,
-    params.search ? buildProxyLogSearchCondition(params.search) : null,
-    params.client ? buildProxyLogClientCondition(params.client) : null,
-    params.siteId ? eq(schema.sites.id, params.siteId) : null,
-    params.fromUtc ? gte(schema.proxyLogs.createdAt, params.fromUtc) : null,
-    params.toUtc ? lt(schema.proxyLogs.createdAt, params.toUtc) : null,
-  ].filter(
-    (condition): condition is NonNullable<typeof condition> =>
-      condition !== null,
-  );
-
-  if (conditions.length === 0) return undefined;
-  return conditions.length === 1 ? conditions[0] : and(...conditions);
 }
 
 function toRoundedMicroNumber(value: number | null | undefined): number {
@@ -693,23 +606,14 @@ export async function statsRoutes(app: FastifyInstance) {
     siteId?: string;
     from?: string;
     to?: string;
+    model?: string;
+    downstreamKeyId?: string;
+    group?: string;
+    stream?: string;
   }) {
     const limit = normalizeProxyLogPageSize(params.limit);
     const offset = normalizeProxyLogOffset(params.offset);
-    const status = normalizeProxyLogStatusFilter(params.status);
-    const search = normalizeProxyLogSearch(params.search);
-    const client = normalizeProxyLogClientFilter(params.client);
-    const siteId = normalizeProxyLogSiteId(params.siteId);
-    const fromUtc = normalizeProxyLogTimeBoundary(params.from);
-    const toUtc = normalizeProxyLogTimeBoundary(params.to);
-    const listWhere = buildProxyLogWhereClause({
-      status,
-      search,
-      client,
-      siteId,
-      fromUtc,
-      toUtc,
-    });
+    const listWhere = buildProxyLogWhereClause(resolveProxyLogFilters(params));
 
     const listRows = (await withProxyLogSelectFields(
       ({ fields }) => {
@@ -799,6 +703,32 @@ export async function statsRoutes(app: FastifyInstance) {
     };
   }
 
+  function resolveProxyLogFilters(params: {
+    status?: string;
+    search?: string;
+    client?: string;
+    siteId?: string;
+    from?: string;
+    to?: string;
+    model?: string;
+    downstreamKeyId?: string;
+    group?: string;
+    stream?: string;
+  }) {
+    return {
+      status: normalizeProxyLogStatusFilter(params.status),
+      search: normalizeProxyLogSearch(params.search),
+      client: normalizeProxyLogClientFilter(params.client),
+      siteId: normalizeProxyLogSiteId(params.siteId),
+      fromUtc: normalizeProxyLogTimeBoundary(params.from),
+      toUtc: normalizeProxyLogTimeBoundary(params.to),
+      model: normalizeProxyLogModelFilter(params.model),
+      downstreamKeyId: normalizeProxyLogDownstreamKeyIdFilter(params.downstreamKeyId),
+      group: normalizeProxyLogGroupFilter(params.group),
+      stream: normalizeProxyLogStreamFilter(params.stream),
+    };
+  }
+
   async function loadProxyLogsMetaPayload(params: {
     status?: string;
     search?: string;
@@ -806,26 +736,33 @@ export async function statsRoutes(app: FastifyInstance) {
     siteId?: string;
     from?: string;
     to?: string;
+    model?: string;
+    downstreamKeyId?: string;
+    group?: string;
+    stream?: string;
   }) {
-    const status = normalizeProxyLogStatusFilter(params.status);
-    const search = normalizeProxyLogSearch(params.search);
-    const client = normalizeProxyLogClientFilter(params.client);
-    const siteId = normalizeProxyLogSiteId(params.siteId);
-    const fromUtc = normalizeProxyLogTimeBoundary(params.from);
-    const toUtc = normalizeProxyLogTimeBoundary(params.to);
+    const filters = resolveProxyLogFilters(params);
     const summaryWhere = buildProxyLogWhereClause({
-      search,
-      client,
-      siteId,
-      fromUtc,
-      toUtc,
+      search: filters.search,
+      client: filters.client,
+      siteId: filters.siteId,
+      fromUtc: filters.fromUtc,
+      toUtc: filters.toUtc,
+      model: filters.model,
+      downstreamKeyId: filters.downstreamKeyId,
+      group: filters.group,
+      stream: filters.stream,
     });
     const clientOptionsWhere = buildProxyLogWhereClause({
-      status,
-      search,
-      siteId,
-      fromUtc,
-      toUtc,
+      status: filters.status,
+      search: filters.search,
+      siteId: filters.siteId,
+      fromUtc: filters.fromUtc,
+      toUtc: filters.toUtc,
+      model: filters.model,
+      downstreamKeyId: filters.downstreamKeyId,
+      group: filters.group,
+      stream: filters.stream,
     });
 
     const clientOptionRowsPromise = withProxyLogSelectFields(
@@ -941,6 +878,10 @@ export async function statsRoutes(app: FastifyInstance) {
       from?: string;
       to?: string;
       view?: string;
+      model?: string;
+      downstreamKeyId?: string;
+      group?: string;
+      stream?: string;
     };
   }>("/api/stats/proxy-logs", async (request, reply) => {
     const view = normalizeProxyLogsView(request.query.view);
@@ -960,6 +901,27 @@ export async function statsRoutes(app: FastifyInstance) {
       summary: metaPayload.summary,
       sites: metaPayload.sites,
     };
+  });
+
+  app.get<{
+    Querystring: {
+      status?: string;
+      search?: string;
+      client?: string;
+      siteId?: string;
+      from?: string;
+      to?: string;
+      model?: string;
+      downstreamKeyId?: string;
+      group?: string;
+      stream?: string;
+      granularity?: string;
+    };
+  }>("/api/stats/proxy-logs/analytics", async (request) => {
+    return loadProxyLogsAnalytics({
+      ...resolveProxyLogFilters(request.query),
+      granularity: request.query.granularity === "day" ? "day" : "hour",
+    });
   });
 
   app.get<{ Params: { id: string } }>(
