@@ -659,7 +659,7 @@ export async function statsRoutes(app: FastifyInstance) {
           .offset(offset)
           .all();
       },
-      { includeBillingDetails: false },
+      { includeBillingDetails: true },
     )) as Array<{
       proxy_logs: Record<string, unknown> & { billingDetails?: string | null };
       accounts: { username?: string | null } | null;
@@ -696,7 +696,9 @@ export async function statsRoutes(app: FastifyInstance) {
     const totalRow = await totalQuery.get();
 
     return {
-      items: listRows.map((row) => mapProxyLogRow(row)),
+      items: listRows.map((row) =>
+        mapProxyLogRow(row, { includeBillingDetails: true }),
+      ),
       total: Number(totalRow?.total || 0),
       page: Math.floor(offset / limit) + 1,
       pageSize: limit,

@@ -188,7 +188,7 @@ describe("stats proxy logs routes", () => {
     expect(body.items[0]?.clientConfidence).toBe(null);
     expect(body.items[0]?.isStream).toBe(false);
     expect(body.items[0]?.firstByteLatencyMs).toBe(12);
-    expect(body.items[0]).not.toHaveProperty("billingDetails");
+    expect(body.items[0]?.billingDetails).toMatchObject({ id: "failed-gpt" });
     expect(body.clientOptions).toEqual([
       { value: "family:codex", label: "协议 · Codex" },
     ]);

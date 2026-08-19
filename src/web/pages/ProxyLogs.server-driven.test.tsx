@@ -12,11 +12,7 @@ const { apiMock } = vi.hoisted(() => ({
     getProxyLogsMeta: vi.fn(),
     getProxyLogsAnalytics: vi.fn(),
     getProxyLogDetail: vi.fn(),
-    getProxyDebugTraces: vi.fn(),
-    getProxyDebugTraceDetail: vi.fn(),
-    getRuntimeSettings: vi.fn(),
     getSites: vi.fn(),
-    updateRuntimeSettings: vi.fn(),
   },
 }));
 
@@ -132,17 +128,6 @@ describe('ProxyLogs server-driven page', () => {
       { id: 9, name: 'main-site', status: 'active' },
       { id: 12, name: 'backup-site', status: 'active' },
     ]);
-    apiMock.getRuntimeSettings.mockResolvedValue({
-      proxyDebugTraceEnabled: false,
-      proxyDebugCaptureHeaders: true,
-      proxyDebugCaptureBodies: false,
-      proxyDebugCaptureStreamChunks: false,
-      proxyDebugTargetSessionId: '',
-      proxyDebugTargetClientKind: '',
-      proxyDebugTargetModel: '',
-      proxyDebugRetentionHours: 24,
-      proxyDebugMaxBodyBytes: 262144,
-    });
     apiMock.getProxyLogs.mockResolvedValue(buildListResponse());
     apiMock.getProxyLogsQuery.mockImplementation((params: any) =>
       apiMock.getProxyLogs(params),
@@ -229,41 +214,6 @@ describe('ProxyLogs server-driven page', () => {
         },
       },
     });
-    apiMock.getProxyDebugTraces.mockResolvedValue({
-      items: [
-        {
-          id: 701,
-          createdAt: '2026-03-28 18:00:00',
-          requestedModel: 'gpt-4o',
-          downstreamPath: '/v1/responses',
-          finalStatus: 'failed',
-          finalUpstreamPath: '/responses',
-          clientKind: 'codex',
-          sessionId: 'sess-debug-1',
-        },
-      ],
-    });
-    apiMock.getProxyDebugTraceDetail.mockResolvedValue({
-      trace: {
-        id: 701,
-        requestedModel: 'gpt-4o',
-        sessionId: 'sess-debug-1',
-        requestHeadersJson: '{\n  "authorization": "Bearer demo"\n}',
-      },
-      attempts: [],
-    });
-    apiMock.updateRuntimeSettings.mockResolvedValue({
-      success: true,
-      proxyDebugTraceEnabled: true,
-      proxyDebugCaptureHeaders: true,
-      proxyDebugCaptureBodies: true,
-      proxyDebugCaptureStreamChunks: false,
-      proxyDebugTargetSessionId: 'sess-debug-1',
-      proxyDebugTargetClientKind: 'codex',
-      proxyDebugTargetModel: 'gpt-4o',
-      proxyDebugRetentionHours: 12,
-      proxyDebugMaxBodyBytes: 131072,
-    });
   });
 
   afterEach(() => {
@@ -297,9 +247,8 @@ describe('ProxyLogs server-driven page', () => {
       expect(text).toContain('全部 12');
       expect(text).toContain('成功 8');
       expect(text).toContain('失败 4');
-      expect(text).toContain('Cherry Studio');
-      expect(text).toContain('Codex');
-      expect(text).toContain('推测');
+      expect(text).toContain('main-site');
+      expect(text).toContain('账号: tester');
       expect(text).toContain('下游 Key: 移动端灰度');
       expect(text).toContain('流式');
       expect(text).toContain('首字');
@@ -310,498 +259,6 @@ describe('ProxyLogs server-driven page', () => {
     }
   });
 
-  it('shows proxy debug traces inline and edits settings through the modal', async () => {
-    let root!: WebTestRenderer;
-
-    try {
-      await act(async () => {
-        root = create(
-          <MemoryRouter initialEntries={['/logs']}>
-            <ToastProvider>
-              <ProxyLogs />
-            </ToastProvider>
-          </MemoryRouter>,
-        );
-      });
-      await flushMicrotasks();
-
-      expect(apiMock.getRuntimeSettings).toHaveBeenCalled();
-      expect(apiMock.getProxyDebugTraces).toHaveBeenCalled();
-      expect(collectText(root.root)).toContain('最近调试追踪');
-      expect(collectText(root.root)).toContain('sess-debug-1');
-
-      const debugSettingsButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && collectText(node).trim() === '调试设置'
-      ));
-
-      await act(async () => {
-        debugSettingsButton.props.onClick();
-      });
-      await flushMicrotasks();
-
-      const traceEnabledToggle = root.root.find((node) => (
-        node.type === 'input'
-        && node.props.type === 'checkbox'
-        && node.props['data-debug-setting'] === 'trace-enabled'
-      ));
-      const captureBodiesToggle = root.root.find((node) => (
-        node.type === 'input'
-        && node.props.type === 'checkbox'
-        && node.props['data-debug-setting'] === 'capture-bodies'
-      ));
-      const sessionInput = root.root.find((node) => (
-        node.type === 'input'
-        && node.props['data-debug-setting'] === 'target-session-id'
-      ));
-      const retentionInput = root.root.find((node) => (
-        node.type === 'input'
-        && node.props['data-debug-setting'] === 'retention-hours'
-      ));
-
-      await act(async () => {
-        traceEnabledToggle.props.onChange({ target: { checked: true } });
-        captureBodiesToggle.props.onChange({ target: { checked: true } });
-        sessionInput.props.onChange({ target: { value: 'sess-debug-1' } });
-        retentionInput.props.onChange({ target: { value: '12' } });
-      });
-
-      const saveButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && collectText(node).trim() === '保存调试设置'
-      ));
-
-      await act(async () => {
-        saveButton.props.onClick();
-      });
-      await flushMicrotasks();
-
-      expect(apiMock.updateRuntimeSettings).toHaveBeenCalledWith(expect.objectContaining({
-        proxyDebugTraceEnabled: true,
-        proxyDebugCaptureBodies: true,
-        proxyDebugTargetSessionId: 'sess-debug-1',
-        proxyDebugRetentionHours: 12,
-      }));
-    } finally {
-      root?.unmount();
-    }
-  });
-
-  it('paginates debug traces in groups of five instead of rendering the whole trace list at once', async () => {
-    apiMock.getProxyDebugTraces.mockResolvedValue({
-      items: Array.from({ length: 7 }, (_, index) => ({
-        id: 701 + index,
-        createdAt: `2026-03-28 18:0${index}:00`,
-        requestedModel: `gpt-4o-mini-${index + 1}`,
-        downstreamPath: '/v1/responses',
-        finalStatus: index % 2 === 0 ? 'failed' : 'success',
-        finalUpstreamPath: '/responses',
-        clientKind: 'codex',
-        sessionId: `sess-debug-${index + 1}`,
-      })),
-    });
-
-    let root!: WebTestRenderer;
-
-    try {
-      await act(async () => {
-        root = create(
-          <MemoryRouter initialEntries={['/logs']}>
-            <ToastProvider>
-              <ProxyLogs />
-            </ToastProvider>
-          </MemoryRouter>,
-        );
-      });
-      await flushMicrotasks();
-
-      expect(collectText(root.root)).toContain('显示第 1 - 5 条，共 7 条');
-      expect(collectText(root.root)).toContain('sess-debug-1');
-      expect(collectText(root.root)).not.toContain('sess-debug-6');
-
-      const detailButtons = root.root.findAll((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && collectText(node).trim() === '查看详情'
-      ));
-      expect(detailButtons).toHaveLength(5);
-
-      const nextPageButton = root.root.find((node) => (
-        node.type === 'button'
-        && node.props['aria-label'] === '调试追踪下一页'
-      ));
-
-      await act(async () => {
-        nextPageButton.props.onClick();
-      });
-      await flushMicrotasks();
-
-      expect(collectText(root.root)).toContain('显示第 6 - 7 条，共 7 条');
-      expect(collectText(root.root)).toContain('sess-debug-6');
-      expect(collectText(root.root)).not.toContain('sess-debug-1');
-    } finally {
-      root?.unmount();
-    }
-  });
-
-  it('allows collapsing and expanding the debug trace panel to reduce page footprint', async () => {
-    let root!: WebTestRenderer;
-
-    try {
-      await act(async () => {
-        root = create(
-          <MemoryRouter initialEntries={['/logs']}>
-            <ToastProvider>
-              <ProxyLogs />
-            </ToastProvider>
-          </MemoryRouter>,
-        );
-      });
-      await flushMicrotasks();
-
-      const toggleButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && node.props['data-debug-trace-panel-toggle'] === true
-      ));
-      const panelBody = root.root.find((node) => (
-        node.type === 'div'
-        && node.props['data-debug-trace-panel-body'] === true
-      ));
-
-      expect(toggleButton.props['aria-expanded']).toBe(true);
-      expect(String(panelBody.props.className || '')).toContain('is-open');
-
-      await act(async () => {
-        toggleButton.props.onClick();
-      });
-      await flushMicrotasks();
-
-      const collapsedToggleButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && node.props['data-debug-trace-panel-toggle'] === true
-      ));
-      const collapsedPanelBody = root.root.find((node) => (
-        node.type === 'div'
-        && node.props['data-debug-trace-panel-body'] === true
-      ));
-
-      expect(collapsedToggleButton.props['aria-expanded']).toBe(false);
-      expect(String(collapsedPanelBody.props.className || '')).not.toContain('is-open');
-
-      await act(async () => {
-        collapsedToggleButton.props.onClick();
-      });
-      await flushMicrotasks();
-
-      const expandedToggleButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && node.props['data-debug-trace-panel-toggle'] === true
-      ));
-      const expandedPanelBody = root.root.find((node) => (
-        node.type === 'div'
-        && node.props['data-debug-trace-panel-body'] === true
-      ));
-
-      expect(expandedToggleButton.props['aria-expanded']).toBe(true);
-      expect(String(expandedPanelBody.props.className || '')).toContain('is-open');
-    } finally {
-      root?.unmount();
-    }
-  });
-
-  it('remembers the collapsed debug trace panel state across remounts', async () => {
-    let root!: WebTestRenderer;
-
-    try {
-      await act(async () => {
-        root = create(
-          <MemoryRouter initialEntries={['/logs']}>
-            <ToastProvider>
-              <ProxyLogs />
-            </ToastProvider>
-          </MemoryRouter>,
-        );
-      });
-      await flushMicrotasks();
-
-      const toggleButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && node.props['data-debug-trace-panel-toggle'] === true
-      ));
-
-      await act(async () => {
-        toggleButton.props.onClick();
-      });
-      await flushMicrotasks();
-
-      expect(globalThis.localStorage.setItem).toHaveBeenCalledWith('metapi.proxyLogs.debugTracePanelExpanded', 'false');
-
-      await act(async () => {
-        root.unmount();
-      });
-
-      await act(async () => {
-        root = create(
-          <MemoryRouter initialEntries={['/logs']}>
-            <ToastProvider>
-              <ProxyLogs />
-            </ToastProvider>
-          </MemoryRouter>,
-        );
-      });
-      await flushMicrotasks();
-
-      const restoredToggleButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && node.props['data-debug-trace-panel-toggle'] === true
-      ));
-      const restoredPanelBody = root.root.find((node) => (
-        node.type === 'div'
-        && node.props['data-debug-trace-panel-body'] === true
-      ));
-
-      expect(globalThis.localStorage.getItem).toHaveBeenCalledWith('metapi.proxyLogs.debugTracePanelExpanded');
-      expect(restoredToggleButton.props['aria-expanded']).toBe(false);
-      expect(String(restoredPanelBody.props.className || '')).not.toContain('is-open');
-    } finally {
-      root?.unmount();
-    }
-  });
-
-  it('opens debug trace detail on demand instead of preloading the first trace inline', async () => {
-    let root!: WebTestRenderer;
-
-    try {
-      await act(async () => {
-        root = create(
-          <MemoryRouter initialEntries={['/logs']}>
-            <ToastProvider>
-              <ProxyLogs />
-            </ToastProvider>
-          </MemoryRouter>,
-        );
-      });
-      await flushMicrotasks();
-
-      expect(apiMock.getProxyDebugTraceDetail).not.toHaveBeenCalled();
-
-      const viewDetailButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && collectText(node).trim() === '查看详情'
-      ));
-
-      await act(async () => {
-        viewDetailButton.props.onClick();
-      });
-      await flushMicrotasks();
-
-      expect(apiMock.getProxyDebugTraceDetail).toHaveBeenCalledWith(701);
-      expect(collectText(root.root)).toContain('原始下游请求头');
-      expect(collectText(root.root)).toContain('Attempt 记录');
-    } finally {
-      root?.unmount();
-    }
-  });
-
-  it('polls debug traces after tracing is enabled so new results are not hidden behind the settings modal', async () => {
-    vi.useFakeTimers();
-    apiMock.getRuntimeSettings.mockResolvedValue({
-      proxyDebugTraceEnabled: true,
-      proxyDebugCaptureHeaders: true,
-      proxyDebugCaptureBodies: false,
-      proxyDebugCaptureStreamChunks: false,
-      proxyDebugTargetSessionId: '',
-      proxyDebugTargetClientKind: '',
-      proxyDebugTargetModel: '',
-      proxyDebugRetentionHours: 24,
-      proxyDebugMaxBodyBytes: 262144,
-    });
-
-    let root!: WebTestRenderer;
-
-    try {
-      await act(async () => {
-        root = create(
-          <MemoryRouter initialEntries={['/logs']}>
-            <ToastProvider>
-              <ProxyLogs />
-            </ToastProvider>
-          </MemoryRouter>,
-        );
-      });
-      await flushMicrotasks();
-
-      const initialCalls = apiMock.getProxyDebugTraces.mock.calls.length;
-
-      await act(async () => {
-        vi.advanceTimersByTime(2100);
-      });
-      await flushMicrotasks();
-
-      expect(apiMock.getProxyDebugTraces.mock.calls.length).toBeGreaterThan(initialCalls);
-    } finally {
-      await act(async () => {
-        root?.unmount();
-      });
-      vi.runOnlyPendingTimers();
-      vi.useRealTimers();
-    }
-  });
-
-  it('keeps debug trace detail visible during polling refresh instead of flashing back to loading', async () => {
-    vi.useFakeTimers();
-    apiMock.getRuntimeSettings.mockResolvedValue({
-      proxyDebugTraceEnabled: true,
-      proxyDebugCaptureHeaders: true,
-      proxyDebugCaptureBodies: false,
-      proxyDebugCaptureStreamChunks: false,
-      proxyDebugTargetSessionId: '',
-      proxyDebugTargetClientKind: '',
-      proxyDebugTargetModel: '',
-      proxyDebugRetentionHours: 24,
-      proxyDebugMaxBodyBytes: 262144,
-    });
-
-    let resolveDetail!: (value: any) => void;
-    apiMock.getProxyDebugTraceDetail
-      .mockResolvedValueOnce({
-        trace: {
-          id: 701,
-          requestedModel: 'gpt-4o',
-          sessionId: 'sess-debug-1',
-          requestHeadersJson: '{\"before\":true}',
-        },
-        attempts: [],
-      })
-      .mockImplementationOnce(() => new Promise((resolve) => {
-        resolveDetail = resolve;
-      }));
-
-    let root!: WebTestRenderer;
-
-    try {
-      await act(async () => {
-        root = create(
-          <MemoryRouter initialEntries={['/logs']}>
-            <ToastProvider>
-              <ProxyLogs />
-            </ToastProvider>
-          </MemoryRouter>,
-        );
-      });
-      await flushMicrotasks();
-
-      const viewDetailButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && collectText(node).trim() === '查看详情'
-      ));
-
-      await act(async () => {
-        viewDetailButton.props.onClick();
-      });
-      await flushMicrotasks();
-
-      expect(collectText(root.root)).toContain('原始下游请求头');
-      expect(collectText(root.root)).not.toContain('加载追踪详情中...');
-
-      await act(async () => {
-        vi.advanceTimersByTime(2100);
-      });
-      await flushMicrotasks();
-
-      expect(collectText(root.root)).toContain('原始下游请求头');
-      expect(collectText(root.root)).not.toContain('加载追踪详情中...');
-
-      await act(async () => {
-        resolveDetail({
-          trace: {
-            id: 701,
-            requestedModel: 'gpt-4o',
-            sessionId: 'sess-debug-1',
-            requestHeadersJson: '{\"after\":true}',
-          },
-          attempts: [],
-        });
-      });
-      await flushMicrotasks();
-
-      expect(collectText(root.root)).toContain('原始下游请求头');
-      expect(collectText(root.root)).not.toContain('加载追踪详情中...');
-    } finally {
-      await act(async () => {
-        root?.unmount();
-      });
-      vi.runOnlyPendingTimers();
-      vi.useRealTimers();
-    }
-  });
-
-  it('copies the saved request headers content from the trace detail modal', async () => {
-    let root!: WebTestRenderer;
-
-    try {
-      await act(async () => {
-        root = create(
-          <MemoryRouter initialEntries={['/logs']}>
-            <ToastProvider>
-              <ProxyLogs />
-            </ToastProvider>
-          </MemoryRouter>,
-        );
-      });
-      await flushMicrotasks();
-
-      const viewDetailButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && collectText(node).trim() === '查看详情'
-      ));
-
-      await act(async () => {
-        viewDetailButton.props.onClick();
-      });
-      await flushMicrotasks();
-
-      expect(collectText(root.root)).not.toContain('Bearer demo');
-
-      const expandHeadersButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && node.props['aria-label'] === '展开原始下游请求头'
-      ));
-
-      await act(async () => {
-        expandHeadersButton.props.onClick();
-      });
-      await flushMicrotasks();
-
-      expect(collectText(root.root)).toContain('Bearer demo');
-
-      const copyButton = root.root.find((node) => (
-        node.type === 'button'
-        && typeof node.props.onClick === 'function'
-        && node.props['aria-label'] === '复制原始下游请求头'
-      ));
-
-      await act(async () => {
-        copyButton.props.onClick({ stopPropagation: () => undefined, preventDefault: () => undefined });
-      });
-      await flushMicrotasks();
-
-      expect(globalThis.navigator.clipboard.writeText).toHaveBeenCalledWith('{\n  "authorization": "Bearer demo"\n}');
-    } finally {
-      root?.unmount();
-    }
-  });
 
   it('keeps the model badge sized to the model name in desktop rows', async () => {
     let root!: WebTestRenderer;
@@ -830,7 +287,7 @@ describe('ProxyLogs server-driven page', () => {
     }
   });
 
-  it('renders explicit client self-reports before protocol-family fallback labels', async () => {
+  it('hides the client column but shows client details in the expanded row', async () => {
     apiMock.getProxyLogs.mockResolvedValue(buildListResponse({
       items: [
         {
@@ -861,6 +318,32 @@ describe('ProxyLogs server-driven page', () => {
         },
       ],
     }));
+    apiMock.getProxyLogDetail.mockResolvedValue({
+      id: 101,
+      createdAt: '2026-03-09 16:00:00',
+      modelRequested: 'gpt-4o',
+      modelActual: 'gpt-4o',
+      status: 'success',
+      latencyMs: 120,
+      firstByteLatencyMs: 22,
+      isStream: false,
+      promptTokens: 10,
+      completionTokens: 5,
+      totalTokens: 15,
+      retryCount: 0,
+      estimatedCost: 1.23,
+      errorMessage: 'downstream: /v1/responses upstream: /v1/responses',
+      username: 'tester',
+      siteName: 'main-site',
+      siteUrl: 'https://main-site.example.com',
+      clientFamily: 'codex',
+      clientAppId: 'openclaw',
+      clientAppName: 'openclaw',
+      clientConfidence: 'exact',
+      downstreamKeyName: '移动端灰度',
+      downstreamKeyGroupName: '项目A',
+      downstreamKeyTags: ['VIP', '灰度'],
+    });
 
     let root!: WebTestRenderer;
 
@@ -880,9 +363,18 @@ describe('ProxyLogs server-driven page', () => {
         node.type === 'tr' && node.props['data-testid'] === 'proxy-log-row-101'
       ));
       const rowText = collectText(row);
-      expect(rowText).toContain('openclaw');
-      expect(rowText).toContain('Codex');
-      expect(rowText).not.toContain('推测');
+      expect(rowText).not.toContain('openclaw');
+      expect(rowText).not.toContain('Codex');
+
+      await act(async () => {
+        row.props.onClick();
+      });
+      await flushMicrotasks();
+
+      const expandedText = collectText(root!.root);
+      expect(expandedText).toContain('openclaw');
+      expect(expandedText).toContain('Codex');
+      expect(expandedText).not.toContain('推测');
     } finally {
       root?.unmount();
     }
@@ -1051,6 +543,87 @@ describe('ProxyLogs server-driven page', () => {
       const rowText = collectText(row);
       expect(rowText).toContain('--');
       expect(rowText).not.toContain('输入0');
+    } finally {
+      root?.unmount();
+    }
+  });
+
+  it('shows cache tokens in the token column when the list returns billing details', async () => {
+    apiMock.getProxyLogs.mockResolvedValue(buildListResponse({
+      items: [
+        {
+          id: 101,
+          createdAt: '2026-03-09 16:00:00',
+          modelRequested: 'gpt-5',
+          modelActual: 'gpt-5',
+          status: 'success',
+          latencyMs: 120,
+          firstByteLatencyMs: 22,
+          isStream: true,
+          promptTokens: 10,
+          completionTokens: 5,
+          totalTokens: 15,
+          retryCount: 0,
+          estimatedCost: 1.23,
+          errorMessage: 'downstream: /v1/responses upstream: /v1/responses',
+          username: 'tester',
+          siteName: 'main-site',
+          siteUrl: 'https://main-site.example.com',
+          downstreamKeyName: '移动端灰度',
+          downstreamKeyGroupName: '项目A',
+          downstreamKeyTags: ['VIP', '灰度'],
+          billingDetails: {
+            usage: {
+              promptTokens: 10,
+              completionTokens: 5,
+              totalTokens: 15,
+              cacheReadTokens: 3000,
+              cacheCreationTokens: 0,
+              billablePromptTokens: 10,
+              promptTokensIncludeCache: true,
+            },
+            pricing: {
+              modelRatio: 1,
+              completionRatio: 2,
+              cacheRatio: 0.1,
+              cacheCreationRatio: 0.1,
+              groupRatio: 1,
+            },
+            breakdown: {
+              inputPerMillion: 0.15,
+              outputPerMillion: 0.6,
+              cacheReadPerMillion: 0.015,
+              cacheCreationPerMillion: 0.015,
+              inputCost: 0,
+              outputCost: 0,
+              cacheReadCost: 0,
+              cacheCreationCost: 0,
+              totalCost: 1.23,
+            },
+          },
+        },
+      ],
+    }));
+
+    let root!: WebTestRenderer;
+
+    try {
+      await act(async () => {
+        root = create(
+          <MemoryRouter initialEntries={['/logs']}>
+            <ToastProvider>
+              <ProxyLogs />
+            </ToastProvider>
+          </MemoryRouter>,
+        );
+      });
+      await flushMicrotasks();
+
+      const row = root!.root.find((node) => (
+        node.type === 'tr' && node.props['data-testid'] === 'proxy-log-row-101'
+      ));
+      const rowText = collectText(row);
+      expect(rowText).toContain('缓存 3K');
     } finally {
       root?.unmount();
     }
