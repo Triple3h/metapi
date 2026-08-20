@@ -1,12 +1,39 @@
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  buildProxyBillingDetails,
   calculateModelUsageBreakdown,
   calculateModelUsageCost,
   fallbackTokenCost,
   type PricingModel,
 } from './modelPricingService.js';
 
+const pricingFetchMock = vi.fn();
+
+vi.mock('undici', () => ({
+  fetch: (url: string, init?: { headers?: Record<string, string> }) =>
+    pricingFetchMock(url, init),
+}));
+
+function jsonResponse(body: unknown) {
+  return {
+    ok: true,
+    status: 200,
+    json: async () => body,
+  };
+}
+
+function notFoundResponse() {
+  return {
+    ok: false,
+    status: 404,
+    json: async () => null,
+  };
+}
+
 describe('modelPricingService', () => {
+  beforeEach(() => {
+    pricingFetchMock.mockReset();
+  });
   it('calculates token-based cost from model ratio and completion ratio', () => {
     const model: PricingModel = {
       modelName: 'gpt-4o',
@@ -182,5 +209,93 @@ describe('modelPricingService', () => {
   it('uses platform-specific fallback token divisor', () => {
     expect(fallbackTokenCost(1500, 'new-api')).toBe(0.003);
     expect(fallbackTokenCost(1500, 'veloera')).toBe(0.0015);
+  });
+
+  it('builds a pricingless billing detail when the upstream has no pricing data', async () => {
+    pricingFetchMock.mockImplementation(async () => notFoundResponse());
+
+    const detail = await buildProxyBillingDetails({
+      site: { id: 901, url: 'https://ark.example.com/api/plan/v3', platform: 'responses' },
+      account: { id: 901, accessToken: 'sk-test' },
+      modelName: 'deepseek-v4-flash',
+      promptTokens: 1000,
+      completionTokens: 500,
+      totalTokens: 1500,
+      cacheReadTokens: 300,
+      cacheCreationTokens: 100,
+      promptTokensIncludeCache: true,
+    });
+
+    expect(detail).not.toBeNull();
+    expect(detail).toMatchObject({
+      quotaType: 0,
+      usage: {
+        promptTokens: 1000,
+        completionTokens: 500,
+        totalTokens: 1500,
+        cacheReadTokens: 300,
+        cacheCreationTokens: 100,
+      },
+      pricing: {
+        modelRatio: 1,
+        completionRatio: 1,
+        cacheRatio: 1,
+        cacheCreationRatio: 1,
+        groupRatio: 1,
+      },
+      breakdown: {
+        inputPerMillion: 0,
+        outputPerMillion: 0,
+        cacheReadPerMillion: 0,
+        cacheCreationPerMillion: 0,
+        inputCost: 0,
+        outputCost: 0,
+        cacheReadCost: 0,
+        cacheCreationCost: 0,
+        totalCost: 0,
+      },
+    });
+  });
+
+  it('builds a pricingless billing detail for per-call (quotaType 1) models', async () => {
+    pricingFetchMock.mockImplementation(async (url: string) => {
+      if (String(url).includes('/api/pricing')) {
+        return jsonResponse([
+          {
+            model_name: 'gpt-image-1',
+            quota_type: 1,
+            model_price: 0.3,
+            enable_groups: ['default'],
+          },
+        ]);
+      }
+      return notFoundResponse();
+    });
+
+    const detail = await buildProxyBillingDetails({
+      site: { id: 902, url: 'https://one.example.com', platform: 'one-hub' },
+      account: { id: 902, accessToken: 'sk-test' },
+      modelName: 'gpt-image-1',
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      cacheReadTokens: 40,
+      cacheCreationTokens: 0,
+      promptTokensIncludeCache: null,
+    });
+
+    expect(detail).not.toBeNull();
+    expect(detail).toMatchObject({
+      quotaType: 0,
+      usage: {
+        cacheReadTokens: 40,
+        cacheCreationTokens: 0,
+      },
+      breakdown: {
+        inputPerMillion: 0,
+        outputPerMillion: 0,
+        totalCost: 0,
+      },
+    });
   });
 });

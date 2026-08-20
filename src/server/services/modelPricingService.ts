@@ -837,6 +837,39 @@ async function fetchJsonViaNewApiShield(url: string, token: string): Promise<unk
   return null;
 }
 
+function buildPricinglessBillingDetails(usage: {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cacheReadTokens?: number;
+  cacheCreationTokens?: number;
+  promptTokensIncludeCache?: boolean | null;
+}): ProxyBillingDetails {
+  const normalizedUsage = normalizeUsageBreakdownInput(usage);
+  return {
+    quotaType: 0,
+    usage: normalizedUsage,
+    pricing: {
+      modelRatio: 1,
+      completionRatio: 1,
+      cacheRatio: 1,
+      cacheCreationRatio: 1,
+      groupRatio: 1,
+    },
+    breakdown: {
+      inputPerMillion: 0,
+      outputPerMillion: 0,
+      cacheReadPerMillion: 0,
+      cacheCreationPerMillion: 0,
+      inputCost: 0,
+      outputCost: 0,
+      cacheReadCost: 0,
+      cacheCreationCost: 0,
+      totalCost: 0,
+    },
+  };
+}
+
 export async function buildProxyBillingDetails(input: EstimateProxyCostInput): Promise<ProxyBillingDetails | null> {
   const promptTokens = toPositiveInt(input.promptTokens);
   const completionTokens = toPositiveInt(input.completionTokens);
@@ -857,13 +890,13 @@ export async function buildProxyBillingDetails(input: EstimateProxyCostInput): P
     }
 
     const pricingData = await getPricingDataCached(input);
-    if (!pricingData) return null;
+    if (!pricingData) return buildPricinglessBillingDetails(usage);
 
     const model = resolveModel(input.modelName, pricingData);
-    if (!model || model.quotaType === 1) return null;
+    if (!model || model.quotaType === 1) return buildPricinglessBillingDetails(usage);
 
     return calculateModelUsageBreakdown(model, usage, pricingData.groupRatio);
   } catch {
-    return null;
+    return buildPricinglessBillingDetails(usage);
   }
 }

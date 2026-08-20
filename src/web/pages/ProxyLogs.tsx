@@ -134,9 +134,18 @@ function formatPerMillionPrice(value: number) {
   return `$${formatCompactNumber(value)} / 1M tokens`;
 }
 
+function isPricinglessBillingDetails(
+  detail: ProxyLogBillingDetails | null | undefined,
+): boolean {
+  if (!detail) return true;
+  return detail.breakdown.inputPerMillion === 0
+    && detail.breakdown.outputPerMillion === 0;
+}
+
 function formatBillingDetailSummary(log: ProxyLogRenderItem) {
   const detail = log.billingDetails;
   if (!detail) return null;
+  if (isPricinglessBillingDetails(detail)) return null;
   return `模型倍率 ${formatCompactNumber(detail.pricing.modelRatio)}，输出倍率 ${formatCompactNumber(detail.pricing.completionRatio)}，缓存倍率 ${formatCompactNumber(detail.pricing.cacheRatio)}，缓存创建倍率 ${formatCompactNumber(detail.pricing.cacheCreationRatio)}，分组倍率 ${formatCompactNumber(detail.pricing.groupRatio)}`;
 }
 
@@ -167,6 +176,7 @@ function renderDownstreamKeySummary(log: ProxyLogRenderItem) {
 function buildBillingProcessLines(log: ProxyLogRenderItem) {
   const detail = log.billingDetails;
   if (!detail) return [];
+  if (isPricinglessBillingDetails(detail)) return [];
 
   const lines = [
     `提示价格：${formatPerMillionPrice(detail.breakdown.inputPerMillion)}`,
