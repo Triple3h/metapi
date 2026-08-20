@@ -3,6 +3,7 @@ import type { ProxyLogsAnalytics } from "../../api.js";
 import {
   formatCompactTokens,
   formatCost,
+  formatPercent,
   formatSecondsFromMs,
 } from "./formatUsage.js";
 
@@ -11,12 +12,22 @@ interface UsageStatsCardsProps {
   loading?: boolean;
 }
 
+function computeCacheHitRate(
+  cacheReadTokens: number,
+  promptTokens: number,
+): number | null {
+  const denominator = promptTokens + cacheReadTokens;
+  if (denominator <= 0) return null;
+  return Math.round((cacheReadTokens / denominator) * 1000) / 10;
+}
+
 function CardShell({
   tint,
   icon,
   label,
   value,
   valueColor,
+  valueExtra,
   sub,
   loading,
 }: {
@@ -25,6 +36,7 @@ function CardShell({
   label: string;
   value: string;
   valueColor?: string;
+  valueExtra?: React.ReactNode;
   sub: React.ReactNode;
   loading?: boolean;
 }) {
@@ -43,6 +55,7 @@ function CardShell({
             style={valueColor ? { color: valueColor } : undefined}
           >
             {value}
+            {valueExtra}
           </strong>
         )}
         <div className="usage-stat-card-sub">
@@ -68,6 +81,8 @@ export default function UsageStatsCards({ stats, loading }: UsageStatsCardsProps
   const cacheCreationTokens = stats?.cacheCreationTokens ?? 0;
   const totalCost = stats?.totalCost ?? 0;
   const averageLatencyMs = stats?.averageLatencyMs ?? null;
+  const cacheHitRate = computeCacheHitRate(cacheReadTokens, promptTokens);
+  const cacheTotalTokens = cacheReadTokens + cacheCreationTokens;
 
   return (
     <div className="usage-stat-cards">
@@ -93,10 +108,27 @@ export default function UsageStatsCards({ stats, loading }: UsageStatsCardsProps
         }
         label="总 Token"
         value={formatCompactTokens(totalTokens)}
+        valueExtra={
+          cacheHitRate != null && cacheTotalTokens > 0 ? (
+            <span
+              style={{
+                marginLeft: 8,
+                fontSize: 13,
+                fontWeight: 600,
+                color: "var(--color-warning)",
+              }}
+            >
+              缓存命中 {formatPercent(cacheHitRate)}
+            </span>
+          ) : null
+        }
         sub={
           <span>
             输入: {formatCompactTokens(promptTokens)} / 输出: {formatCompactTokens(completionTokens)}
-            {" / "}缓存: {formatCompactTokens(cacheReadTokens + cacheCreationTokens)}
+            {" / "}缓存: {formatCompactTokens(cacheTotalTokens)}
+            {cacheHitRate != null && cacheTotalTokens > 0
+              ? ` (${formatPercent(cacheHitRate)})`
+              : ""}
           </span>
         }
       />
