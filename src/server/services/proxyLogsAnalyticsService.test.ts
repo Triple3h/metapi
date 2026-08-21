@@ -109,6 +109,7 @@ describe("aggregateProxyLogsAnalytics", () => {
       totalTokens: 50,
       cacheReadTokens: 30,
       cacheCreationTokens: 2,
+      totalInputTokens: 34,
     });
     expect(result.stats.totalCost).toBeCloseTo(0.35, 6);
     expect(result.stats.averageLatencyMs).toBe(100);
@@ -121,10 +122,13 @@ describe("aggregateProxyLogsAnalytics", () => {
       cacheReadTokens: 10,
       cacheCreationTokens: 2,
     });
-    expect(result.trend[0].cacheHitRate).toBe(50);
+    // promptTokens already includes cache reads (flag unset), so the hit rate
+    // is cacheRead / promptTokens, not cacheRead / (promptTokens + cacheRead).
+    expect(result.trend[0].cacheHitRate).toBe(100);
     expect(result.trend[1]).toMatchObject({ inputTokens: 4, cacheReadTokens: 0 });
     expect(result.trend[1].cacheHitRate).toBe(0);
     expect(result.trend[2]).toMatchObject({ inputTokens: 20, cacheReadTokens: 20 });
+    expect(result.trend[2].cacheHitRate).toBe(100);
     expect(result.trend[3]).toMatchObject({ inputTokens: 0 });
 
     expect(result.modelStats.map((item) => item.label)).toEqual([
@@ -146,6 +150,36 @@ describe("aggregateProxyLogsAnalytics", () => {
     expect(result.siteStats).toEqual([
       expect.objectContaining({ key: "1", label: "site-a", requests: 3 }),
     ]);
+  });
+
+  it("treats cache reads as billed separately when promptTokensIncludeCache is false", () => {
+    const rows: ProxyLogsAnalyticsRow[] = [
+      rowAt(new Date(2026, 2, 9, 8, 30, 0), {
+        promptTokens: 10,
+        completionTokens: 5,
+        totalTokens: 15,
+        billingDetails: JSON.stringify({
+          usage: {
+            promptTokens: 10,
+            cacheReadTokens: 20,
+            cacheCreationTokens: 3,
+            promptTokensIncludeCache: false,
+          },
+        }),
+      }),
+    ];
+
+    const result = aggregateProxyLogsAnalytics(rows, { from, to }, "hour");
+
+    // promptTokens excludes the cache reads here, so the real input total is
+    // 10 + 20 + 3 = 33 and the hit rate is 20 / 33.
+    expect(result.stats.totalInputTokens).toBe(33);
+    expect(result.trend[0]).toMatchObject({
+      inputTokens: 10,
+      cacheReadTokens: 20,
+      cacheCreationTokens: 3,
+    });
+    expect(result.trend[0].cacheHitRate).toBeCloseTo(60.6, 1);
   });
 
   it("collapses rows into local day buckets for day granularity", () => {

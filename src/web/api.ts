@@ -543,6 +543,7 @@ export type ProxyLogsAnalytics = {
     totalTokens: number;
     cacheReadTokens: number;
     cacheCreationTokens: number;
+    totalInputTokens: number;
     totalCost: number;
     averageLatencyMs: number | null;
   };

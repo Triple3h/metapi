@@ -50,6 +50,7 @@ export interface ProxyLogsAnalyticsStats {
   totalTokens: number;
   cacheReadTokens: number;
   cacheCreationTokens: number;
+  totalInputTokens: number;
   totalCost: number;
   averageLatencyMs: number | null;
 }
@@ -107,17 +108,20 @@ function pad2(value: number): string {
 
 function readBillingCacheTokens(
   billingDetails: unknown,
-): { cacheReadTokens: number; cacheCreationTokens: number } {
+): { cacheReadTokens: number; cacheCreationTokens: number; promptTokensIncludeCache: boolean | null } {
   const parsed = parseProxyLogBillingDetails(billingDetails);
-  if (!parsed) return { cacheReadTokens: 0, cacheCreationTokens: 0 };
+  if (!parsed) return { cacheReadTokens: 0, cacheCreationTokens: 0, promptTokensIncludeCache: null };
   const usage = parsed.usage;
   if (!usage || typeof usage !== "object" || Array.isArray(usage)) {
-    return { cacheReadTokens: 0, cacheCreationTokens: 0 };
+    return { cacheReadTokens: 0, cacheCreationTokens: 0, promptTokensIncludeCache: null };
   }
   const record = usage as Record<string, unknown>;
   return {
     cacheReadTokens: toNonNegativeInt(record.cacheReadTokens),
     cacheCreationTokens: toNonNegativeInt(record.cacheCreationTokens),
+    promptTokensIncludeCache: typeof record.promptTokensIncludeCache === "boolean"
+      ? record.promptTokensIncludeCache
+      : null,
   };
 }
 
@@ -176,6 +180,7 @@ interface TrendBucketAccumulator {
   outputTokens: number;
   cacheCreationTokens: number;
   cacheReadTokens: number;
+  totalInputTokens: number;
 }
 
 function buildTrendBucketTemplate(
@@ -204,6 +209,7 @@ function buildTrendBucketTemplate(
       outputTokens: 0,
       cacheCreationTokens: 0,
       cacheReadTokens: 0,
+      totalInputTokens: 0,
     });
   }
   return buckets;
@@ -247,10 +253,9 @@ function sortDistribution(
     .sort((left, right) => right.tokens - left.tokens);
 }
 
-function computeCacheHitRate(cacheReadTokens: number, promptTokens: number): number | null {
-  const denominator = promptTokens + cacheReadTokens;
-  if (denominator <= 0) return null;
-  return Math.round((cacheReadTokens / denominator) * 1000) / 10;
+function computeCacheHitRate(cacheReadTokens: number, totalInputTokens: number): number | null {
+  if (totalInputTokens <= 0) return null;
+  return Math.round((cacheReadTokens / totalInputTokens) * 1000) / 10;
 }
 
 export function aggregateProxyLogsAnalytics(
@@ -267,6 +272,7 @@ export function aggregateProxyLogsAnalytics(
     totalTokens: 0,
     cacheReadTokens: 0,
     cacheCreationTokens: 0,
+    totalInputTokens: 0,
     totalCost: 0,
     latencyTotalMs: 0,
     latencyCount: 0,
@@ -293,6 +299,12 @@ export function aggregateProxyLogsAnalytics(
     );
     const cost = toNonNegativeFloat(row.estimatedCost);
     const cache = readBillingCacheTokens(row.billingDetails);
+    // The stored promptTokens already includes cache reads when the upstream
+    // reports promptTokensIncludeCache=true (or the flag is unknown); only when
+    // it is explicitly false are cache reads billed separately from the prompt.
+    const totalInputTokens = cache.promptTokensIncludeCache === false
+      ? promptTokens + cache.cacheReadTokens + cache.cacheCreationTokens
+      : promptTokens;
 
     stats.totalRequests += 1;
     if (isSuccess) stats.successCount += 1;
@@ -302,6 +314,7 @@ export function aggregateProxyLogsAnalytics(
     stats.totalTokens += totalTokens;
     stats.cacheReadTokens += cache.cacheReadTokens;
     stats.cacheCreationTokens += cache.cacheCreationTokens;
+    stats.totalInputTokens += totalInputTokens;
     stats.totalCost += cost;
     const latencyMs = row.latencyMs;
     if (typeof latencyMs === "number" && Number.isFinite(latencyMs) && latencyMs >= 0) {
@@ -341,6 +354,7 @@ export function aggregateProxyLogsAnalytics(
     bucket.outputTokens += completionTokens;
     bucket.cacheCreationTokens += cache.cacheCreationTokens;
     bucket.cacheReadTokens += cache.cacheReadTokens;
+    bucket.totalInputTokens += totalInputTokens;
   }
 
   return {
@@ -358,6 +372,7 @@ export function aggregateProxyLogsAnalytics(
       totalTokens: stats.totalTokens,
       cacheReadTokens: stats.cacheReadTokens,
       cacheCreationTokens: stats.cacheCreationTokens,
+      totalInputTokens: stats.totalInputTokens,
       totalCost: roundMicro(stats.totalCost),
       averageLatencyMs: stats.latencyCount > 0
         ? Math.round(stats.latencyTotalMs / stats.latencyCount)
@@ -370,7 +385,7 @@ export function aggregateProxyLogsAnalytics(
       outputTokens: bucket.outputTokens,
       cacheCreationTokens: bucket.cacheCreationTokens,
       cacheReadTokens: bucket.cacheReadTokens,
-      cacheHitRate: computeCacheHitRate(bucket.cacheReadTokens, bucket.inputTokens),
+      cacheHitRate: computeCacheHitRate(bucket.cacheReadTokens, bucket.totalInputTokens),
     })),
     modelStats: sortDistribution(modelMap),
     groupStats: sortDistribution(groupMap),

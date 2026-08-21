@@ -904,6 +904,7 @@ describe("stats proxy logs routes", () => {
         totalTokens: number;
         cacheReadTokens: number;
         cacheCreationTokens: number;
+        totalInputTokens: number;
         totalCost: number;
         averageLatencyMs: number | null;
       };
@@ -929,6 +930,7 @@ describe("stats proxy logs routes", () => {
       totalTokens: 160,
       cacheReadTokens: 40,
       cacheCreationTokens: 5,
+      totalInputTokens: 110,
     });
     expect(analytics.stats.totalCost).toBeCloseTo(0.6, 6);
     expect(analytics.stats.averageLatencyMs).toBe(200);
@@ -936,7 +938,9 @@ describe("stats proxy logs routes", () => {
     const hitBucket = analytics.trend.find((point) => point.inputTokens === 100);
     expect(hitBucket).toBeDefined();
     expect(hitBucket!.cacheReadTokens).toBe(40);
-    expect(hitBucket!.cacheHitRate).toBeCloseTo(28.6, 1);
+    // promptTokens already includes cache reads (flag unset), so the hit rate
+    // is cacheRead / promptTokens = 40 / 100.
+    expect(hitBucket!.cacheHitRate).toBe(40);
 
     expect(analytics.modelStats.map((item) => item.label)).toEqual([
       "gpt-5.6-sol",

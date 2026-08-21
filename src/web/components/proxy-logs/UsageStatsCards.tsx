@@ -14,11 +14,10 @@ interface UsageStatsCardsProps {
 
 function computeCacheHitRate(
   cacheReadTokens: number,
-  promptTokens: number,
+  totalInputTokens: number,
 ): number | null {
-  const denominator = promptTokens + cacheReadTokens;
-  if (denominator <= 0) return null;
-  return Math.round((cacheReadTokens / denominator) * 1000) / 10;
+  if (totalInputTokens <= 0) return null;
+  return Math.round((cacheReadTokens / totalInputTokens) * 1000) / 10;
 }
 
 function CardShell({
@@ -81,7 +80,10 @@ export default function UsageStatsCards({ stats, loading }: UsageStatsCardsProps
   const cacheCreationTokens = stats?.cacheCreationTokens ?? 0;
   const totalCost = stats?.totalCost ?? 0;
   const averageLatencyMs = stats?.averageLatencyMs ?? null;
-  const cacheHitRate = computeCacheHitRate(cacheReadTokens, promptTokens);
+  const cacheHitRate = computeCacheHitRate(
+    cacheReadTokens,
+    stats?.totalInputTokens ?? (promptTokens + cacheReadTokens + cacheCreationTokens),
+  );
   const cacheTotalTokens = cacheReadTokens + cacheCreationTokens;
 
   return (
